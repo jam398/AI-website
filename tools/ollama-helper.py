@@ -36,10 +36,11 @@ import textwrap
 import urllib.request
 import urllib.error
 import copy
+import socket
 
 # ── Config ──────────────────────────────────────────────────────
 OLLAMA_URL = "http://localhost:11434/api/chat"
-DEFAULT_MODEL = "llama3"
+DEFAULT_MODEL = "deepseek-r1:8b"
 CONTENT_FILE = os.path.join(os.path.dirname(__file__), "..", "content", "site.json")
 
 # Fields the tool is allowed to modify (dot-path prefixes).
@@ -109,9 +110,12 @@ def call_ollama(model: str, system_prompt: str, user_prompt: str) -> str:
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=600) as resp:
             body = json.loads(resp.read().decode("utf-8"))
             return body.get("message", {}).get("content", "")
+    except socket.timeout:
+        print("\n✖ Ollama timed out (10 min). Try a smaller model: python ollama-helper.py gemma3:1b")
+        sys.exit(1)
     except urllib.error.URLError as exc:
         print(f"\n✖ Could not reach Ollama at {OLLAMA_URL}")
         print(f"  Error: {exc}")
@@ -195,45 +199,75 @@ def main() -> None:
         print("No instruction given. Exiting.")
         return
 
+    # Detect which section the instruction targets
+    section_key = None
+    instruction_lower = instruction.lower()
+    for key in ["home", "about", "services", "contact", "footer"]:
+        if key in instruction_lower:
+            section_key = key
+            break
+
+    if section_key and section_key in data:
+        target_data = {section_key: data[section_key]}
+        section_note = f"You are editing ONLY the '{section_key}' section. Return ONLY this section as JSON (a single object with one key: '{section_key}')."
+    else:
+        target_data = data
+        section_note = "Return the complete JSON with your edits applied."
+
     # Build prompts
-    system_prompt = textwrap.dedent("""\
+    system_prompt = textwrap.dedent(f"""\
         You are an expert copywriter for a formal AI consulting business called
-        JM AI Consulting (consultant: Jose Martinez). You will receive the
-        current site content as JSON and a user instruction.
+        JM AI Consulting (consultant: Jose Martinez). You will receive site
+        content as JSON and a user instruction.
 
         RULES:
-        - Return ONLY the complete, valid JSON with your edits applied.
+        - {section_note}
         - Do NOT wrap the output in markdown code fences.
+        - Do NOT include any explanation, only output valid JSON.
         - Keep the same JSON structure and all keys intact.
-        - NEVER change these fields: meta.siteTitle, meta.consultant,
-          meta.email, contact.email, nav.
         - Maintain a formal, professional tone throughout.
         - Keep edits minimal and targeted to the user's instruction.
     """)
     user_prompt = (
         f"INSTRUCTION: {instruction}\n\n"
-        f"CURRENT CONTENT:\n{json.dumps(data, indent=2, ensure_ascii=False)}"
+        f"CURRENT CONTENT:\n{json.dumps(target_data, indent=2, ensure_ascii=False)}"
     )
 
-    print("\n⏳ Calling Ollama…")
+    print(f"\n⏳ Calling Ollama ({model})… this may take a few minutes.")
+    if section_key:
+        print(f"   Editing section: {section_key}")
     response_text = call_ollama(model, system_prompt, user_prompt)
 
     # Parse response
-    # Try to extract JSON from the response (in case model wraps it)
+    # Strip thinking tags from deepseek-r1 (<think>...</think>)
     json_text = response_text.strip()
-    if json_text.startswith("```"):
-        # Strip code fences
+    import re
+    json_text = re.sub(r"<think>.*?</think>", "", json_text, flags=re.DOTALL).strip()
+
+    # Strip code fences if present
+    if "```" in json_text:
         lines = json_text.split("\n")
         lines = [l for l in lines if not l.strip().startswith("```")]
-        json_text = "\n".join(lines)
+        json_text = "\n".join(lines).strip()
 
     try:
-        updated = json.loads(json_text)
+        parsed = json.loads(json_text)
     except json.JSONDecodeError as exc:
         print(f"\n✖ Ollama returned invalid JSON: {exc}")
         print("  Raw response (first 500 chars):")
         print(f"  {response_text[:500]}")
         return
+
+    # Merge section back into full data
+    if section_key and section_key in parsed:
+        updated = copy.deepcopy(data)
+        updated[section_key] = parsed[section_key]
+    elif section_key and section_key not in parsed:
+        # Model returned the section content without the wrapper key
+        updated = copy.deepcopy(data)
+        updated[section_key] = parsed
+    else:
+        updated = parsed
 
     # Validate
     errors = validate_output(data, updated)
