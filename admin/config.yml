@@ -7,6 +7,8 @@ backend:
   name: github
   repo: jam398/AI-website
   branch: main
+  auth_type: pkce
+  app_id: Ov23liZdQjfd5RVwhIC1
 
 # Uncomment the next line for local development with Decap CMS
 # (run `npx decap-server` alongside `npm start`):
