@@ -1,0 +1,51 @@
+---
+layout: base.njk
+title: About
+permalink: /about/
+---
+
+{# ══════ Page Header ══════ #}
+<section class="page-header">
+  <div class="container">
+    <h1>{{ site.about.pageTitle }}</h1>
+  </div>
+</section>
+
+{# ══════ Bio ══════ #}
+<section class="section">
+  <div class="container bio-section">
+    <p>{{ site.about.bio }}</p>
+    <p>{{ site.about.bioExtended }}</p>
+  </div>
+</section>
+
+{# ══════ Working Style ══════ #}
+<section class="section section-light">
+  <div class="container bio-section">
+    <h2>Working Style</h2>
+    <p>{{ site.about.workingStyle }}</p>
+  </div>
+</section>
+
+{# ══════ Focus Areas ══════ #}
+<section class="section">
+  <div class="container">
+    <h2 class="section-title">Focus Areas</h2>
+    <div class="grid grid-3">
+      {% for fp in site.about.focusPoints %}
+      <div class="card">
+        <h3>{{ fp.title }}</h3>
+        <p>{{ fp.description }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{# ══════ Industries ══════ #}
+<section class="section section-light">
+  <div class="container bio-section">
+    <h2>Industries</h2>
+    <p>{{ site.about.industries }}</p>
+  </div>
+</section>

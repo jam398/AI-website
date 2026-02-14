@@ -1,0 +1,56 @@
+---
+layout: base.njk
+title: Home
+permalink: /
+---
+
+{# ══════ Hero ══════ #}
+<section class="hero">
+  <div class="container">
+    <h1>{{ site.home.headline }}</h1>
+    <p class="subheadline">{{ site.home.subheadline }}</p>
+    <p class="credibility">{{ site.home.credibility }}</p>
+    <p class="who-we-help">Who we help: <strong>{{ site.home.whoWeHelp }}</strong></p>
+    <a href="{{ site.home.ctaButtonUrl }}" class="btn btn-white">{{ site.home.ctaButtonLabel }}</a>
+  </div>
+</section>
+
+{# ══════ Services Summary ══════ #}
+<section class="section">
+  <div class="container">
+    <h2 class="section-title">What We Offer</h2>
+    <div class="grid grid-3">
+      {% for svc in site.home.servicesSummary %}
+      <div class="card">
+        <div class="card-icon">{{ svc.icon }}</div>
+        <h3>{{ svc.title }}</h3>
+        <p>{{ svc.description }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{# ══════ How We Work ══════ #}
+<section class="section section-light">
+  <div class="container">
+    <h2 class="section-title">How We Work</h2>
+    <div class="steps">
+      {% for item in site.home.howWeWork %}
+      <div class="step">
+        <span class="step-number">{{ item.step }}</span>
+        <h3>{{ item.title }}</h3>
+        <p>{{ item.description }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{# ══════ CTA ══════ #}
+<section class="cta-section">
+  <div class="container">
+    <h2>{{ site.home.ctaText }}</h2>
+    <a href="{{ site.home.ctaButtonUrl }}" class="btn btn-primary">{{ site.home.ctaButtonLabel }}</a>
+  </div>
+</section>

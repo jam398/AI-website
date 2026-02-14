@@ -1,0 +1,13 @@
+{
+  "name": "jm-ai-consulting",
+  "version": "1.0.0",
+  "description": "JM AI Consulting — Professional AI consulting website built with 11ty",
+  "scripts": {
+    "build": "eleventy",
+    "start": "eleventy --serve",
+    "clean": "rimraf _site"
+  },
+  "dependencies": {
+    "@11ty/eleventy": "^2.0.1"
+  }
+}

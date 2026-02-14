@@ -1,0 +1,145 @@
+# ============================================================
+# CMS Configuration — JM AI Consulting
+# Compatible with both Sveltia CMS and Decap CMS.
+# ============================================================
+
+backend:
+  name: github
+  repo: jam398/AI-website
+  branch: main
+
+# Uncomment the next line for local development with Decap CMS
+# (run `npx decap-server` alongside `npm start`):
+# local_backend: true
+
+media_folder: "public/images"
+public_folder: "/images"
+
+# ── Single-file collection: content/site.json ──
+collections:
+  - name: "content"
+    label: "Site Content"
+    files:
+
+      # ────────────────────────
+      # Meta / Global Settings
+      # ────────────────────────
+      - label: "All Site Content"
+        name: "site"
+        file: "content/site.json"
+        format: "json"
+        fields:
+
+          # ── Meta ──
+          - label: "Site Meta"
+            name: "meta"
+            widget: "object"
+            fields:
+              - { label: "Site Title",       name: "siteTitle",       widget: "string" }
+              - { label: "Site Description", name: "siteDescription", widget: "text" }
+              - { label: "Consultant Name",  name: "consultant",      widget: "string" }
+              - { label: "Email",            name: "email",           widget: "string" }
+
+          # ── Navigation ──
+          - label: "Navigation"
+            name: "nav"
+            widget: "object"
+            fields:
+              - label: "Items"
+                name: "items"
+                widget: "list"
+                fields:
+                  - { label: "Label", name: "label", widget: "string" }
+                  - { label: "URL",   name: "url",   widget: "string" }
+
+          # ── Home Page ──
+          - label: "Home Page"
+            name: "home"
+            widget: "object"
+            fields:
+              - { label: "Headline",        name: "headline",       widget: "string" }
+              - { label: "Subheadline",     name: "subheadline",    widget: "text" }
+              - { label: "Credibility",     name: "credibility",    widget: "string" }
+              - { label: "Who We Help",     name: "whoWeHelp",      widget: "string" }
+              - label: "Services Summary"
+                name: "servicesSummary"
+                widget: "list"
+                fields:
+                  - { label: "Title",       name: "title",       widget: "string" }
+                  - { label: "Icon (emoji)", name: "icon",        widget: "string" }
+                  - { label: "Description", name: "description", widget: "text" }
+              - label: "How We Work"
+                name: "howWeWork"
+                widget: "list"
+                fields:
+                  - { label: "Step #",      name: "step",        widget: "string" }
+                  - { label: "Title",       name: "title",       widget: "string" }
+                  - { label: "Description", name: "description", widget: "text" }
+              - { label: "CTA Text",         name: "ctaText",        widget: "string" }
+              - { label: "CTA Button Label", name: "ctaButtonLabel", widget: "string" }
+              - { label: "CTA Button URL",   name: "ctaButtonUrl",   widget: "string" }
+
+          # ── About Page ──
+          - label: "About Page"
+            name: "about"
+            widget: "object"
+            fields:
+              - { label: "Page Title",     name: "pageTitle",    widget: "string" }
+              - { label: "Bio",            name: "bio",          widget: "text" }
+              - { label: "Bio (extended)", name: "bioExtended",  widget: "text" }
+              - { label: "Working Style",  name: "workingStyle", widget: "text" }
+              - label: "Focus Points"
+                name: "focusPoints"
+                widget: "list"
+                fields:
+                  - { label: "Title",       name: "title",       widget: "string" }
+                  - { label: "Description", name: "description", widget: "text" }
+              - { label: "Industries", name: "industries", widget: "text" }
+
+          # ── Services Page ──
+          - label: "Services Page"
+            name: "services"
+            widget: "object"
+            fields:
+              - { label: "Page Title", name: "pageTitle", widget: "string" }
+              - { label: "Intro",      name: "intro",     widget: "text" }
+              - label: "Service Items"
+                name: "items"
+                widget: "list"
+                fields:
+                  - { label: "Title",       name: "title",       widget: "string" }
+                  - { label: "Description", name: "description", widget: "text" }
+                  - label: "Bullets"
+                    name: "bullets"
+                    widget: "list"
+                    field:
+                      { label: "Bullet", name: "bullet", widget: "string" }
+                  - label: "Deliverables"
+                    name: "deliverables"
+                    widget: "list"
+                    field:
+                      { label: "Deliverable", name: "deliverable", widget: "string" }
+              - { label: "CTA Text",         name: "ctaText",        widget: "string" }
+              - { label: "CTA Button Label", name: "ctaButtonLabel", widget: "string" }
+              - { label: "CTA Button URL",   name: "ctaButtonUrl",   widget: "string" }
+
+          # ── Contact Page ──
+          - label: "Contact Page"
+            name: "contact"
+            widget: "object"
+            fields:
+              - { label: "Page Title",        name: "pageTitle",       widget: "string" }
+              - { label: "Intro",             name: "intro",           widget: "text" }
+              - { label: "Email Label",       name: "emailLabel",      widget: "string" }
+              - { label: "Email Address",     name: "email",           widget: "string" }
+              - { label: "Template Heading",  name: "templateHeading", widget: "string" }
+              - { label: "Template Subject",  name: "templateSubject", widget: "string" }
+              - { label: "Template Body",     name: "templateBody",    widget: "text" }
+
+          # ── Footer ──
+          - label: "Footer"
+            name: "footer"
+            widget: "object"
+            fields:
+              - { label: "Copyright Text", name: "text",    widget: "string" }
+              - { label: "Tagline",        name: "tagline", widget: "string" }

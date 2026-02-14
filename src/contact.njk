@@ -1,0 +1,37 @@
+---
+layout: base.njk
+title: Contact
+permalink: /contact/
+---
+
+{# ══════ Page Header ══════ #}
+<section class="page-header">
+  <div class="container">
+    <h1>{{ site.contact.pageTitle }}</h1>
+  </div>
+</section>
+
+{# ══════ Contact Info ══════ #}
+<section class="section">
+  <div class="container">
+    <div class="contact-wrapper">
+      <p class="intro-text">{{ site.contact.intro }}</p>
+
+      <div class="contact-block">
+        <p class="contact-label">{{ site.contact.emailLabel }}</p>
+        <p class="contact-email">
+          <a href="mailto:{{ site.contact.email }}">{{ site.contact.email }}</a>
+          <button class="copy-btn" onclick="navigator.clipboard.writeText('{{ site.contact.email }}').then(function(){var b=document.querySelector('.copy-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy';},2000);})">Copy</button>
+        </p>
+      </div>
+
+      {# ── Suggested email template ── #}
+      <div class="email-template">
+        <h3>{{ site.contact.templateHeading }}</h3>
+        <p class="template-subject"><strong>Subject:</strong> {{ site.contact.templateSubject }}</p>
+        <pre>{{ site.contact.templateBody }}</pre>
+        <a href="mailto:{{ site.contact.email }}?subject={{ site.contact.templateSubject | urlencode }}" class="btn btn-primary" style="margin-top:1.5rem;">Open in Email Client</a>
+      </div>
+    </div>
+  </div>
+</section>

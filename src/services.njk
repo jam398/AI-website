@@ -1,0 +1,55 @@
+---
+layout: base.njk
+title: Services
+permalink: /services/
+---
+
+{# ══════ Page Header ══════ #}
+<section class="page-header">
+  <div class="container">
+    <h1>{{ site.services.pageTitle }}</h1>
+  </div>
+</section>
+
+{# ══════ Intro ══════ #}
+<section class="section">
+  <div class="container bio-section">
+    <p class="intro-text">{{ site.services.intro }}</p>
+  </div>
+</section>
+
+{# ══════ Service Details ══════ #}
+<section class="section section-light">
+  <div class="container">
+    {% for svc in site.services.items %}
+    <div class="service-detail">
+      <h3>{{ svc.title }}</h3>
+      <p class="description">{{ svc.description }}</p>
+
+      <h4>What's Included</h4>
+      <ul>
+        {% for b in svc.bullets %}
+        <li>{{ b }}</li>
+        {% endfor %}
+      </ul>
+
+      <div class="deliverables">
+        <h4>Deliverables</h4>
+        <ul>
+          {% for d in svc.deliverables %}
+          <li>{{ d }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+{# ══════ CTA ══════ #}
+<section class="cta-section">
+  <div class="container">
+    <h2>{{ site.services.ctaText }}</h2>
+    <a href="{{ site.services.ctaButtonUrl }}" class="btn btn-primary">{{ site.services.ctaButtonLabel }}</a>
+  </div>
+</section>

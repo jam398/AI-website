@@ -1,0 +1,154 @@
+{
+  "meta": {
+    "siteTitle": "JM AI Consulting",
+    "siteDescription": "AI consulting that turns ideas into working systems. Training, automations, and strategy for small businesses, startups, and professional services.",
+    "consultant": "Jose Martinez",
+    "email": "jose--addiel@hotmail.com"
+  },
+  "nav": {
+    "items": [
+      { "label": "Home", "url": "/" },
+      { "label": "About", "url": "/about/" },
+      { "label": "Services", "url": "/services/" },
+      { "label": "Contact", "url": "/contact/" }
+    ]
+  },
+  "home": {
+    "headline": "AI consulting that turns ideas into working systems",
+    "subheadline": "We help organizations adopt artificial intelligence with clarity, purpose, and measurable outcomes — no unnecessary complexity, no wasted investment.",
+    "credibility": "IT-focused AI consultant specializing in practical adoption and automation.",
+    "whoWeHelp": "Small & local businesses, startups, professional services",
+    "servicesSummary": [
+      {
+        "title": "Training",
+        "icon": "📘",
+        "description": "Hands-on AI training tailored to your team's skill level and business context."
+      },
+      {
+        "title": "Automations",
+        "icon": "⚙️",
+        "description": "Design and implement AI-powered workflows that reduce manual effort and errors."
+      },
+      {
+        "title": "AI Strategy",
+        "icon": "🧭",
+        "description": "Develop a clear, actionable roadmap for integrating AI into your operations."
+      }
+    ],
+    "howWeWork": [
+      {
+        "step": "1",
+        "title": "Discovery",
+        "description": "We begin with a focused assessment of your current operations, goals, and readiness for AI adoption."
+      },
+      {
+        "step": "2",
+        "title": "Strategy",
+        "description": "We develop a tailored plan that identifies the highest-impact opportunities for AI in your business."
+      },
+      {
+        "step": "3",
+        "title": "Implementation",
+        "description": "We execute the plan — training your team, building automations, and ensuring everything works in practice."
+      },
+      {
+        "step": "4",
+        "title": "Support",
+        "description": "We provide ongoing guidance to help you refine, scale, and sustain your AI capabilities."
+      }
+    ],
+    "ctaText": "Ready to get started? Reach out today.",
+    "ctaButtonLabel": "Email Jose",
+    "ctaButtonUrl": "mailto:jose--addiel@hotmail.com"
+  },
+  "about": {
+    "pageTitle": "About",
+    "bio": "Jose Martinez is an IT-focused AI consultant who helps organizations move from curiosity about artificial intelligence to confident, practical adoption. With a background in information technology and a focus on real-world application, Jose works with business leaders and teams to identify where AI creates genuine value — and then helps them capture it.",
+    "bioExtended": "JM AI Consulting operates on a simple principle: technology should serve the business, not the other way around. Every engagement is built around your specific context, goals, and constraints. There are no one-size-fits-all solutions here.",
+    "workingStyle": "All consulting is delivered remotely, with clear communication, structured timelines, and full transparency at every stage. Whether the engagement involves a single training session or a multi-phase strategy rollout, clients receive the same level of thoroughness and professionalism.",
+    "focusPoints": [
+      {
+        "title": "Training & Enablement",
+        "description": "Helping teams understand AI tools and techniques so they can operate with confidence and independence."
+      },
+      {
+        "title": "Automation Design",
+        "description": "Identifying repetitive tasks and manual bottlenecks, then designing AI-powered workflows to address them."
+      },
+      {
+        "title": "Strategic Planning",
+        "description": "Developing clear roadmaps for AI adoption that align with business goals and available resources."
+      }
+    ],
+    "industries": "JM AI Consulting works with small and local businesses, startups, and professional services firms across a range of industries — including legal, healthcare administration, real estate, financial services, and retail."
+  },
+  "services": {
+    "pageTitle": "Services",
+    "intro": "JM AI Consulting offers three core service areas, each designed to help your organization adopt AI with clarity and confidence. All services are delivered remotely and tailored to your specific needs.",
+    "items": [
+      {
+        "title": "AI Training & Enablement",
+        "description": "Practical, hands-on training designed to bring your team up to speed on AI tools, workflows, and best practices — without the jargon.",
+        "bullets": [
+          "Customized training sessions for teams of any skill level",
+          "Tool-specific instruction (e.g., large language models, automation platforms, data analysis tools)",
+          "Workshops on prompt engineering, responsible AI use, and evaluating AI outputs",
+          "Follow-up resources and reference materials for continued learning"
+        ],
+        "deliverables": [
+          "Recorded training sessions",
+          "Custom reference guides and cheat sheets",
+          "Post-training assessment and recommendations"
+        ]
+      },
+      {
+        "title": "Automation Design & Implementation Support",
+        "description": "We identify your most time-consuming manual processes and design AI-powered automations to handle them — accurately and at scale.",
+        "bullets": [
+          "Process audit to identify automation opportunities",
+          "Workflow design using AI and integration platforms",
+          "Prototype development and testing",
+          "Documentation and handoff for internal maintenance"
+        ],
+        "deliverables": [
+          "Process audit report with prioritized recommendations",
+          "Working automation prototypes",
+          "Technical documentation and maintenance guide"
+        ]
+      },
+      {
+        "title": "AI Strategy",
+        "description": "A structured engagement to help you define where AI fits in your organization — and build a realistic plan to get there.",
+        "bullets": [
+          "Current-state assessment of AI readiness",
+          "Competitive landscape and opportunity analysis",
+          "Phased adoption roadmap with clear milestones",
+          "Risk assessment and mitigation planning",
+          "Vendor and tool evaluation guidance"
+        ],
+        "deliverables": [
+          "AI Strategy Report with executive summary",
+          "Phased implementation roadmap",
+          "Tool and vendor evaluation matrix",
+          "Quarterly review framework"
+        ]
+      }
+    ],
+    "ctaText": "Interested in working together? Get in touch to discuss your needs.",
+    "ctaButtonLabel": "Contact Jose",
+    "ctaButtonUrl": "mailto:jose--addiel@hotmail.com"
+  },
+  "contact": {
+    "pageTitle": "Contact",
+    "intro": "JM AI Consulting is available for new engagements. All consulting is delivered remotely. To discuss your needs and explore how we can help, please reach out via email.",
+    "emailLabel": "Email",
+    "email": "jose--addiel@hotmail.com",
+    "templateHeading": "Suggested Email Template",
+    "templateSubject": "AI Consulting Inquiry — [Your Company Name]",
+    "templateBody": "Hello Jose,\n\nI'm reaching out to discuss a potential AI consulting engagement.\n\n• Company/Organization: [Name]\n• Industry: [Your industry]\n• Area of interest: [Training / Automation / Strategy / Other]\n• Brief description: [A few sentences about what you're looking to accomplish]\n• Preferred timeline: [Any relevant dates or deadlines]\n\nI look forward to hearing from you.\n\nBest regards,\n[Your Name]"
+  },
+  "footer": {
+    "text": "© 2026 JM AI Consulting. All rights reserved.",
+    "tagline": "AI consulting delivered with clarity, precision, and purpose."
+  }
+}
