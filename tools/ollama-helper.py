@@ -40,7 +40,7 @@ import socket
 
 # ── Config ──────────────────────────────────────────────────────
 OLLAMA_URL = "http://localhost:11434/api/chat"
-DEFAULT_MODEL = "deepseek-r1:8b"
+DEFAULT_MODEL = "qwen3:8b"
 CONTENT_FILE = os.path.join(os.path.dirname(__file__), "..", "content", "site.json")
 
 # Fields the tool is allowed to modify (dot-path prefixes).
@@ -215,8 +215,10 @@ def main() -> None:
         section_note = "Return the complete JSON with your edits applied."
 
     # Build prompts
+    # /no_think disables qwen3's thinking mode for faster responses
+    think_disable = "/no_think\n" if "qwen" in model.lower() else ""
     system_prompt = textwrap.dedent(f"""\
-        You are an expert copywriter for a formal AI consulting business called
+        {think_disable}You are an expert copywriter for a formal AI consulting business called
         JM AI Consulting (consultant: Jose Martinez). You will receive site
         content as JSON and a user instruction.
 
