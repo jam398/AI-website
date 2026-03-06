@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://api.github.com https://raw.githubusercontent.com https://api.openai.com; frame-src blob: data:; img-src 'self' data:">
   <title>Admin — JM AI Consulting</title>
   <style>
 /* ═══════════════════════════════════════════════════════════
@@ -290,7 +291,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
       <div class="form-group">
         <label>GitHub Personal Access Token</label>
         <input type="password" id="setup-github" placeholder="ghp_... or github_pat_..." autocomplete="off">
-        <small>Needs <strong>repo</strong> scope. <a href="https://github.com/settings/tokens/new?scopes=repo&description=JM+AI+Admin" target="_blank" rel="noopener">Create one here →</a></small>
+        <small>Needs <strong>contents: write</strong> permission for this repo only. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a Fine-grained PAT →</a></small>
       </div>
       <div class="form-group">
         <label>Repository (owner/repo)</label>
@@ -311,6 +312,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
       <div class="topbar-right">
         <span class="status" id="status">● Loading...</span>
         <button class="btn-icon" onclick="openSettings()" title="Settings">⚙</button>
+        <button class="btn-icon" onclick="logOut()" title="Log out & clear keys">🚪</button>
         <button class="btn-chat" id="chat-toggle" onclick="toggleChat()">💬 Chat</button>
       </div>
     </header>
@@ -421,7 +423,13 @@ Section reference:
   /* ========== UTILITIES ========== */
   function esc(s) {
     if (typeof s !== 'string') return String(s ?? '');
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+  }
+
+  function escCSS(css) {
+    // Prevent CSS injection by stripping </style> tags
+    if (typeof css !== 'string') return '';
+    return css.replace(/<\/style/gi, '&lt;/style');
   }
 
   function truncate(s, n) {
@@ -520,6 +528,17 @@ Section reference:
     document.getElementById('settings-modal').style.display = 'none';
   };
 
+  /* ========== LOGOUT (S8: session management) ========== */
+  window.logOut = function () {
+    if (!confirm('Clear all saved keys and log out?')) return;
+    localStorage.removeItem('jmai_openai');
+    localStorage.removeItem('jmai_github');
+    localStorage.removeItem('jmai_repo');
+    state.openaiKey = '';
+    state.githubToken = '';
+    location.reload();
+  };
+
   window.updateSettings = function () {
     const key = document.getElementById('set-openai').value.trim();
     const token = document.getElementById('set-github').value.trim();
@@ -596,7 +615,7 @@ Section reference:
           }
         ],
         temperature: 0.2,
-        max_tokens: 4096
+        max_tokens: 8192
       })
     });
 
@@ -617,6 +636,17 @@ Section reference:
     const req = ['meta', 'nav', 'home', 'about', 'services', 'contact', 'footer'];
     const missing = req.filter(k => !(k in parsed));
     if (missing.length) throw new Error(`AI response missing sections: ${missing.join(', ')}`);
+
+    // S6: Validate protected fields weren't changed
+    const PROTECTED = ['meta.siteTitle', 'meta.consultant', 'meta.email', 'contact.email'];
+    for (const p of PROTECTED) {
+      const [a, b] = p.split('.');
+      if (state.siteData[a]?.[b] !== parsed[a]?.[b]) {
+        parsed[a][b] = state.siteData[a][b]; // Silently restore protected value
+      }
+    }
+    // Protect nav structure
+    parsed.nav = state.siteData.nav;
 
     return parsed;
   }
@@ -666,7 +696,7 @@ Section reference:
     const footer = `<footer class="footer"><div class="container"><p>${esc(data.footer.text)}</p><p>${esc(data.footer.tagline)}</p></div></footer>`;
     const main = renderPage(page, data);
 
-    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${state.siteCSS}</style></head><body>${header}<main>${main}</main>${footer}</body></html>`;
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${escCSS(state.siteCSS)}</style></head><body>${header}<main>${main}</main>${footer}</body></html>`;
   }
 
   function renderPage(page, d) {
@@ -692,7 +722,7 @@ Section reference:
       <section class="section"><div class="container">
         <h2 class="section-title">What We Offer</h2>
         <div class="grid grid-3">
-          ${h.servicesSummary.map(s => `<div class="card"><div class="card-icon">${s.icon}</div><h3>${esc(s.title)}</h3><p>${esc(s.description)}</p></div>`).join('')}
+          ${h.servicesSummary.map(s => `<div class="card"><div class="card-icon">${esc(s.icon)}</div><h3>${esc(s.title)}</h3><p>${esc(s.description)}</p></div>`).join('')}
         </div>
       </div></section>
       <section class="section section-light"><div class="container">
@@ -785,6 +815,20 @@ Section reference:
     const instruction = input.value.trim();
     if (!instruction || state.isLoading) return;
 
+    // S4: Rate limiting — min 3s between sends
+    const now = Date.now();
+    if (state._lastSend && (now - state._lastSend) < 3000) {
+      showToast('Please wait a few seconds between requests', 'info');
+      return;
+    }
+    state._lastSend = now;
+
+    // S6: Input length limit
+    if (instruction.length > 2000) {
+      showToast('Instruction too long (max 2000 chars)', 'error');
+      return;
+    }
+
     input.value = '';
     addMsg('user', esc(instruction));
 
@@ -843,7 +887,7 @@ Section reference:
     if (rejectBtn) { rejectBtn.disabled = true; }
 
     try {
-      const commitMsg = `AI edit: ${pending.instruction.substring(0, 72)}`;
+      const commitMsg = `AI edit: ${pending.instruction.substring(0, 72).replace(/[\r\n`$\\]/g, ' ')}`;
       await publishToGitHub(pending.data, commitMsg);
       state.siteData = pending.data;
       updatePreview();
