@@ -638,7 +638,7 @@ Section reference:
     if (missing.length) throw new Error(`AI response missing sections: ${missing.join(', ')}`);
 
     // S6: Validate protected fields weren't changed
-    const PROTECTED = ['meta.siteTitle', 'meta.consultant', 'meta.email', 'contact.email'];
+    const PROTECTED = ['meta.siteTitle', 'meta.consultant'];
     for (const p of PROTECTED) {
       const [a, b] = p.split('.');
       if (state.siteData[a]?.[b] !== parsed[a]?.[b]) {
@@ -696,7 +696,7 @@ Section reference:
     const footer = `<footer class="footer"><div class="container"><p>${esc(data.footer.text)}</p><p>${esc(data.footer.tagline)}</p></div></footer>`;
     const main = renderPage(page, data);
 
-    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${escCSS(state.siteCSS)}</style></head><body>${header}<main>${main}</main>${footer}</body></html>`;
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${escCSS(state.siteCSS)}</style></head><body>${header}<main>${main}</main>${footer}<script>document.addEventListener('click',function(e){var a=e.target.closest('a');if(a)e.preventDefault();});<\/script></body></html>`;
   }
 
   function renderPage(page, d) {
@@ -829,6 +829,14 @@ Section reference:
       return;
     }
 
+    // Detect confirmation phrases and redirect to Apply button
+    const confirmPattern = /^(yes|do it|yes do it|go ahead|apply|confirm|yes change it|ok|okay|si|yes please|yep|yeah)\s*[.!]?$/i;
+    if (confirmPattern.test(instruction) && Object.keys(state.pendingChanges).length > 0) {
+      addMsg('user', esc(instruction));
+      addMsg('ai', 'It looks like you\'re confirming the previous change. Please click the <strong>✓ Apply &amp; Publish</strong> button on the change card above to save it.');
+      return;
+    }
+
     input.value = '';
     addMsg('user', esc(instruction));
 
@@ -944,6 +952,7 @@ Section reference:
     document.getElementById('preview-label').textContent = `Preview — ${page.charAt(0).toUpperCase() + page.slice(1)}`;
     updatePreview();
     updateQuickActions();
+    addMsg('system', `Switched to <strong>${page}</strong> page.`);
   }
 
   /* ========== QUICK ACTIONS ========== */

@@ -3,7 +3,7 @@
 | Field       | Value                                          |
 |-------------|------------------------------------------------|
 | **ID**      | SPRINT-001                                     |
-| **Status**  | 🔴 Inactive                                    |
+| **Status**  | ✅ Completed                                    |
 | **Priority**| High                                           |
 | **Type**    | Bug                                            |
 | **File**    | `admin/index.html`                             |
