@@ -21,13 +21,33 @@ The last chat message (especially tall change-proposal cards) gets cut off at th
 
 Additionally, `.chat-messages` has only `padding: 14px` on all sides — the last element sits flush against the bottom edge of the scroll container.
 
-### Fix
+---
 
-1. Wrap `scrollTop` assignment in `requestAnimationFrame` so the browser lays out the content first.
-2. Add extra `padding-bottom` to `.chat-messages` so the last message has breathing room.
+## Fix History
+
+### Round 1 (`dff763c`)
+1. Wrapped `scrollTop` in single `requestAnimationFrame`.
+2. Added `60px` bottom padding to `.chat-messages`.
+
+**Result:** Partially fixed — still chopped on tall change cards.
+
+### Round 2 (`f24304c`)
+1. Strengthened `scrollChat()` with **double** `requestAnimationFrame` + `setTimeout(150ms)` fallback.
+2. Changed confirmation flow to **auto-apply** pending changes when user types "ok"/"yes"/etc. instead of telling them to scroll up and find the Apply button.
+
+**Result:** Fully fixed — chat always scrolls to bottom, and confirmation-by-text works seamlessly.
+
+---
+
+## Acceptance Criteria
+
+- [x] Last message (including tall change cards) is fully visible
+- [x] Apply/Reject buttons are visible without manual scrolling
+- [x] Typing "ok", "yes", etc. auto-applies pending changes (no need to find button)
+- [x] Chat scrolls correctly even for rapid successive messages
 
 ---
 
 ## Estimated Effort
 
-~10 minutes.
+~20 minutes total (across 2 rounds).
