@@ -159,12 +159,13 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
 .msg-change {
   align-self: stretch; background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 0; overflow: hidden; animation: fadeIn 0.3s ease;
+  display: flex; flex-direction: column; max-height: 420px;
 }
 .msg-change-header {
   padding: 9px 13px; border-bottom: 1px solid var(--border);
-  font-size: 0.78rem; font-weight: 600; color: var(--text-muted);
+  font-size: 0.78rem; font-weight: 600; color: var(--text-muted); flex-shrink: 0;
 }
-.diff-list { padding: 10px 13px; font-size: 0.78rem; font-family: Consolas, Monaco, monospace; max-height: 300px; overflow-y: auto; }
+.diff-list { padding: 10px 13px; font-size: 0.78rem; font-family: Consolas, Monaco, monospace; flex: 1; min-height: 0; overflow-y: auto; }
 .diff-item { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--surface-2); }
 .diff-item:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
 .diff-path { color: var(--text-dim); margin-bottom: 3px; font-size: 0.72rem; }
@@ -176,7 +177,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
   color: var(--success); background: var(--success-soft);
   padding: 3px 7px; border-radius: 3px; margin: 2px 0; white-space: pre-wrap; word-break: break-word;
 }
-.msg-change-actions { padding: 9px 13px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+.msg-change-actions { padding: 9px 13px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-shrink: 0; }
 .btn-apply {
   flex: 1; padding: 7px; background: var(--success); color: #fff; border: none;
   border-radius: var(--radius-sm); font-family: var(--font); font-size: 0.82rem;
@@ -798,6 +799,7 @@ Section reference:
       requestAnimationFrame(() => { c.scrollTop = c.scrollHeight; });
     });
     setTimeout(() => { c.scrollTop = c.scrollHeight; }, 150);
+    setTimeout(() => { c.scrollTop = c.scrollHeight; }, 300);
   }
 
   function showLoading() {
@@ -823,16 +825,7 @@ Section reference:
       return;
     }
 
-    // Detect confirmation phrases and auto-apply the latest pending change
-    const confirmPattern = /^(yes|yep|yeah|ok|okay|si|sure|do it|go ahead|apply|confirm|change it|update it|publish it|save it|yes please|y)\b/i;
-    const pendingIds = Object.keys(state.pendingChanges);
-    if (confirmPattern.test(instruction) && pendingIds.length > 0) {
-      addMsg('user', esc(instruction));
-      const latestId = pendingIds[pendingIds.length - 1];
-      addMsg('system', 'Applying changes…');
-      await applyChange(Number(latestId));
-      return;
-    }
+
 
     input.value = '';
     addMsg('user', esc(instruction));
@@ -859,7 +852,7 @@ Section reference:
             ${d.new !== undefined ? `<div class="diff-new">+ ${esc(truncate(formatVal(d.new), 200))}</div>` : ''}
           </div>`).join('');
 
-        const extra = diffs.length > 20 ? `<div style="padding:4px 13px;font-size:0.72rem;color:var(--text-dim)">+ ${diffs.length - 20} more changes</div>` : '';
+        const extra = diffs.length > 20 ? `<div style="padding:4px 13px;font-size:0.72rem;color:var(--text-dim);flex-shrink:0">+ ${diffs.length - 20} more changes</div>` : '';
 
         addMsg('change', `
           <div class="msg-change-header">📋 Proposed Changes — ${diffs.length} field${diffs.length !== 1 ? 's' : ''}</div>
