@@ -1007,7 +1007,6 @@ Section reference:
       updatePreview();
       updateQuickActions();
       setStatus('Connected', 'ok');
-      addMsg('system', `✓ Loaded site data. You're editing the <strong>${state.currentPage}</strong> page.`);
       addMsg('ai', 'Hi! I\'m your AI content editor. Tell me what you\'d like to change — for example:<br><br>• "Make the headline shorter and more direct"<br>• "Add a new service about chatbot development"<br>• "Update the email address to hello@example.com"<br><br>Switch page tabs above to preview different pages.');
     } catch (err) {
       setStatus('Error', 'error');

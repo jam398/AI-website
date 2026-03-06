@@ -91,11 +91,12 @@ Instead of adding chat messages, show the current page in a fixed element above 
 
 ## Acceptance Criteria
 
-- [ ] Switching from Home to Contact tab shows "Switched to **contact** page." in chat
-- [ ] Switching to any tab updates the chat context indicator
-- [ ] The AI still receives the correct `state.currentPage` in its prompt
-- [ ] Quick actions update to match the new tab (already works)
-- [ ] No duplicate or excessive messages when switching tabs rapidly
+- [x] Switching from Home to Contact tab shows "Switched to **contact** page." in chat
+- [x] Switching to any tab updates the chat context indicator
+- [x] The stale "You're editing the **home** page" init message has been removed
+- [x] The AI still receives the correct `state.currentPage` in its prompt
+- [x] Quick actions update to match the new tab (already works)
+- [x] No duplicate or excessive messages when switching tabs rapidly
 
 ---
 
