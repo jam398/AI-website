@@ -140,7 +140,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
   border-radius: 4px; font-size: 0.68rem; font-weight: 600;
 }
 .chat-messages {
-  flex: 1; overflow-y: auto; padding: 14px; display: flex;
+  flex: 1; overflow-y: auto; padding: 14px 14px 60px 14px; display: flex;
   flex-direction: column; gap: 10px;
 }
 .msg {
@@ -637,16 +637,6 @@ Section reference:
     const missing = req.filter(k => !(k in parsed));
     if (missing.length) throw new Error(`AI response missing sections: ${missing.join(', ')}`);
 
-    // S6: Validate protected fields weren't changed
-    const PROTECTED = ['meta.siteTitle', 'meta.consultant'];
-    for (const p of PROTECTED) {
-      const [a, b] = p.split('.');
-      if (state.siteData[a]?.[b] !== parsed[a]?.[b]) {
-        parsed[a][b] = state.siteData[a][b]; // Silently restore protected value
-      }
-    }
-    // Protect nav structure
-    parsed.nav = state.siteData.nav;
 
     return parsed;
   }
@@ -803,7 +793,7 @@ Section reference:
 
   function scrollChat() {
     const c = document.getElementById('chat-messages');
-    c.scrollTop = c.scrollHeight;
+    requestAnimationFrame(() => { c.scrollTop = c.scrollHeight; });
   }
 
   function showLoading() {
@@ -830,7 +820,7 @@ Section reference:
     }
 
     // Detect confirmation phrases and redirect to Apply button
-    const confirmPattern = /^(yes|do it|yes do it|go ahead|apply|confirm|yes change it|ok|okay|si|yes please|yep|yeah)\s*[.!]?$/i;
+    const confirmPattern = /^(yes|yep|yeah|ok|okay|si|sure|do it|go ahead|apply|confirm|change it|update it|publish it|save it|yes please|y)\b/i;
     if (confirmPattern.test(instruction) && Object.keys(state.pendingChanges).length > 0) {
       addMsg('user', esc(instruction));
       addMsg('ai', 'It looks like you\'re confirming the previous change. Please click the <strong>✓ Apply &amp; Publish</strong> button on the change card above to save it.');
