@@ -793,7 +793,11 @@ Section reference:
 
   function scrollChat() {
     const c = document.getElementById('chat-messages');
-    requestAnimationFrame(() => { c.scrollTop = c.scrollHeight; });
+    requestAnimationFrame(() => {
+      c.scrollTop = c.scrollHeight;
+      requestAnimationFrame(() => { c.scrollTop = c.scrollHeight; });
+    });
+    setTimeout(() => { c.scrollTop = c.scrollHeight; }, 150);
   }
 
   function showLoading() {
@@ -819,11 +823,14 @@ Section reference:
       return;
     }
 
-    // Detect confirmation phrases and redirect to Apply button
+    // Detect confirmation phrases and auto-apply the latest pending change
     const confirmPattern = /^(yes|yep|yeah|ok|okay|si|sure|do it|go ahead|apply|confirm|change it|update it|publish it|save it|yes please|y)\b/i;
-    if (confirmPattern.test(instruction) && Object.keys(state.pendingChanges).length > 0) {
+    const pendingIds = Object.keys(state.pendingChanges);
+    if (confirmPattern.test(instruction) && pendingIds.length > 0) {
       addMsg('user', esc(instruction));
-      addMsg('ai', 'It looks like you\'re confirming the previous change. Please click the <strong>✓ Apply &amp; Publish</strong> button on the change card above to save it.');
+      const latestId = pendingIds[pendingIds.length - 1];
+      addMsg('system', 'Applying changes…');
+      await applyChange(Number(latestId));
       return;
     }
 
