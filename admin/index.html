@@ -383,15 +383,31 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
   /* ========== CONFIGURATION ========== */
   const PAGES = ['home', 'about', 'services', 'contact'];
 
-  const SYSTEM_PROMPT = `You are a website content editor for JM AI Consulting. You receive the full site JSON and an instruction.
+  const SYSTEM_PROMPT = `You are a friendly, knowledgeable AI content editor for the website "JM AI Consulting". You can see the full site content as JSON.
 
-RULES:
-1. Return ONLY valid JSON — no explanations, no markdown code fences, no extra text.
-2. Change ONLY what the user asks for. Keep everything else EXACTLY the same.
-3. Maintain the same JSON structure and field names.
-4. Maintain a professional, consulting-appropriate tone.
-5. If the instruction is ambiguous, make the most reasonable minimal edit.
-6. Your response must be the COMPLETE site JSON with all sections (meta, nav, home, about, services, contact, footer).
+You operate in TWO modes:
+
+## MODE 1 — CONVERSATION (default)
+When the user asks questions, wants suggestions, asks what they can change, or is chatting:
+- Respond in plain, natural language. Be helpful and specific.
+- Reference actual content from the site JSON (e.g. tell them their current headline, email, etc.)
+- Suggest improvements when asked.
+- If a request is vague, ask clarifying questions.
+- NEVER return JSON in conversation mode.
+
+Examples of conversation triggers: "what can I change?", "what's the current headline?", "suggest something", "help", "what do you think?", "show me", "tell me about", "hi", greetings, questions.
+
+## MODE 2 — EDIT
+When the user clearly wants to CHANGE, UPDATE, REPLACE, ADD, or REMOVE content:
+- Return the COMPLETE modified site.json wrapped in a JSON code block like:
+\`\`\`json
+{ ... }
+\`\`\`
+- Change ONLY what the user asks for. Keep everything else EXACTLY the same.
+- Maintain the same JSON structure and field names.
+- Your JSON must include ALL sections: meta, nav, home, about, services, contact, footer.
+
+Examples of edit triggers: "change the headline to...", "update the email", "add a new service", "remove the tagline", "make the bio shorter".
 
 Section reference:
 - meta: site title, description, consultant name, email
@@ -400,7 +416,9 @@ Section reference:
 - about: consultant bio, working style, focus areas, industries served
 - services: 3 detailed service offerings with bullets and deliverables
 - contact: intro, email, suggested email template
-- footer: copyright text and tagline`;
+- footer: copyright text and tagline
+
+Maintain a professional, consulting-appropriate tone in both modes.`;
 
   const QUICK_ACTIONS = {
     home: ['Change the headline', 'Update the subheadline', 'Edit a service card', 'Modify CTA text'],
@@ -420,7 +438,8 @@ Section reference:
     currentPage: 'home',
     chatOpen: true,
     isLoading: false,
-    pendingChanges: {}
+    pendingChanges: {},
+    chatContext: []   // conversation history for AI context
   };
 
   /* ========== UTILITIES ========== */
@@ -605,19 +624,29 @@ Section reference:
 
   /* ========== OPENAI API ========== */
   async function callAI(instruction) {
+    // Build conversation messages with context
+    const messages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: `Current full site.json:\n\`\`\`json\n${JSON.stringify(state.siteData, null, 2)}\n\`\`\`\n\nThe user is currently viewing the "${state.currentPage}" page.`
+      }
+    ];
+
+    // Add last 10 conversation turns for context
+    const recent = state.chatContext.slice(-10);
+    recent.forEach(m => messages.push(m));
+
+    // Add current instruction
+    messages.push({ role: 'user', content: instruction });
+
     const r = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.openaiKey}` },
       body: JSON.stringify({
         model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: `Current full site.json:\n\`\`\`json\n${JSON.stringify(state.siteData, null, 2)}\n\`\`\`\n\nThe user is currently viewing the "${state.currentPage}" page.\n\nInstruction: ${instruction}\n\nReturn the complete modified site.json.`
-          }
-        ],
-        temperature: 0.2,
+        messages,
+        temperature: 0.4,
         max_tokens: 8192
       })
     });
@@ -628,20 +657,42 @@ Section reference:
     }
 
     const d = await r.json();
-    let content = d.choices[0].message.content.trim();
+    return d.choices[0].message.content.trim();
+  }
 
-    // Strip code fences
-    content = content.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+  /** Try to extract JSON from AI response. Returns parsed object or null. */
+  function extractJSON(response) {
+    // Try to find ```json ... ``` block first
+    const fenceMatch = response.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    const candidate = fenceMatch ? fenceMatch[1].trim() : null;
+    if (candidate) {
+      try {
+        const parsed = JSON.parse(candidate);
+        const req = ['meta', 'nav', 'home', 'about', 'services', 'contact', 'footer'];
+        if (req.every(k => k in parsed)) return parsed;
+      } catch (_) {}
+    }
+    // If no fence, check if the entire response is valid JSON
+    if (response.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(response);
+        const req = ['meta', 'nav', 'home', 'about', 'services', 'contact', 'footer'];
+        if (req.every(k => k in parsed)) return parsed;
+      } catch (_) {}
+    }
+    return null;
+  }
 
-    const parsed = JSON.parse(content);
-
-    // Validate structure
-    const req = ['meta', 'nav', 'home', 'about', 'services', 'contact', 'footer'];
-    const missing = req.filter(k => !(k in parsed));
-    if (missing.length) throw new Error(`AI response missing sections: ${missing.join(', ')}`);
-
-
-    return parsed;
+  /** Convert plain text to safe HTML with basic markdown support */
+  function mdToHTML(text) {
+    return esc(text)
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`(.+?)`/g, '<code style="background:var(--surface-2);padding:1px 5px;border-radius:3px;font-size:0.82em">$1</code>')
+      .replace(/^[•\-] (.+)$/gm, '<li style="margin-left:16px">$1</li>')
+      .replace(/^(\d+)\. (.+)$/gm, '<li style="margin-left:16px">$1. $2</li>')
+      .replace(/\n{2,}/g, '<br><br>')
+      .replace(/\n/g, '<br>');
   }
 
   /* ========== DIFF ========== */
@@ -833,7 +884,8 @@ Section reference:
     const container = document.getElementById('chat-messages');
     container.innerHTML = '';
     state.pendingChanges = {};
-    addMsg('ai', 'Hi! I\'m your AI content editor. Tell me what you\'d like to change — for example:<br><br>• "Make the headline shorter and more direct"<br>• "Add a new service about chatbot development"<br>• "Update the email address to hello@example.com"<br><br>Switch page tabs above to preview different pages.');
+    state.chatContext = [];
+    addMsg('ai', 'Hi! I\'m your AI content editor. You can chat with me naturally — ask questions, get suggestions, or request changes.<br><br>Try things like:<br>• "What\'s the current headline?"<br>• "What can I change on this page?"<br>• "Make the headline shorter and more direct"<br>• "Update the email address to hello@example.com"<br><br>Switch page tabs above to preview different pages.');
   };
 
   /* ========== CHAT ========== */
@@ -888,45 +940,57 @@ Section reference:
 
     input.value = '';
     addMsg('user', esc(instruction));
+    state.chatContext.push({ role: 'user', content: instruction });
 
     state.isLoading = true;
     document.getElementById('btn-send').disabled = true;
     const loadingEl = showLoading();
 
     try {
-      const newData = await callAI(instruction);
+      const response = await callAI(instruction);
       loadingEl.remove();
 
-      const diffs = flatDiff(state.siteData, newData);
-      if (diffs.length === 0) {
-        addMsg('ai', 'No changes needed — the content already matches your request.');
+      // Try to extract JSON (edit mode)
+      const newData = extractJSON(response);
+
+      if (newData) {
+        // MODE 2 — Edit: show diff card
+        const diffs = flatDiff(state.siteData, newData);
+        if (diffs.length === 0) {
+          addMsg('ai', 'No changes needed — the content already matches your request.');
+          state.chatContext.push({ role: 'assistant', content: 'No changes needed.' });
+        } else {
+          const id = Date.now();
+          state.pendingChanges[id] = { data: newData, instruction };
+
+          const diffHTML = diffs.slice(0, 20).map(d => `
+            <div class="diff-item">
+              <div class="diff-path">${esc(d.path)}</div>
+              ${d.old !== undefined ? `<div class="diff-old">− ${esc(truncate(formatVal(d.old), 200))}</div>` : ''}
+              ${d.new !== undefined ? `<div class="diff-new">+ ${esc(truncate(formatVal(d.new), 200))}</div>` : ''}
+            </div>`).join('');
+
+          const extra = diffs.length > 20 ? `<div style="padding:4px 13px;font-size:0.72rem;color:var(--text-dim);flex-shrink:0">+ ${diffs.length - 20} more changes</div>` : '';
+
+          addMsg('change', `
+            <div class="msg-change-header">📋 Proposed Changes — ${diffs.length} field${diffs.length !== 1 ? 's' : ''}</div>
+            <div class="diff-list">${diffHTML}</div>
+            ${extra}
+            <div class="msg-change-actions">
+              <button class="btn-apply" id="apply-${id}" onclick="applyChange(${id})">✓ Apply &amp; Publish</button>
+              <button class="btn-reject" id="reject-${id}" onclick="rejectChange(${id})">✕ Reject</button>
+            </div>
+          `);
+          state.chatContext.push({ role: 'assistant', content: `[Proposed ${diffs.length} changes]` });
+        }
       } else {
-        const id = Date.now();
-        state.pendingChanges[id] = { data: newData, instruction };
-
-        const diffHTML = diffs.slice(0, 20).map(d => `
-          <div class="diff-item">
-            <div class="diff-path">${esc(d.path)}</div>
-            ${d.old !== undefined ? `<div class="diff-old">− ${esc(truncate(formatVal(d.old), 200))}</div>` : ''}
-            ${d.new !== undefined ? `<div class="diff-new">+ ${esc(truncate(formatVal(d.new), 200))}</div>` : ''}
-          </div>`).join('');
-
-        const extra = diffs.length > 20 ? `<div style="padding:4px 13px;font-size:0.72rem;color:var(--text-dim);flex-shrink:0">+ ${diffs.length - 20} more changes</div>` : '';
-
-        addMsg('change', `
-          <div class="msg-change-header">📋 Proposed Changes — ${diffs.length} field${diffs.length !== 1 ? 's' : ''}</div>
-          <div class="diff-list">${diffHTML}</div>
-          ${extra}
-          <div class="msg-change-actions">
-            <button class="btn-apply" id="apply-${id}" onclick="applyChange(${id})">✓ Apply &amp; Publish</button>
-            <button class="btn-reject" id="reject-${id}" onclick="rejectChange(${id})">✕ Reject</button>
-          </div>
-        `);
+        // MODE 1 — Conversation: show as chat message
+        addMsg('ai', mdToHTML(response));
+        state.chatContext.push({ role: 'assistant', content: response });
       }
     } catch (err) {
       loadingEl.remove();
-      const msg = err.message.includes('JSON') ? 'AI returned an invalid response. Try rephrasing your request.' : err.message;
-      addMsg('ai', `⚠️ ${esc(msg)}`);
+      addMsg('ai', `⚠️ ${esc(err.message)}`);
     }
 
     state.isLoading = false;
@@ -1059,7 +1123,7 @@ Section reference:
       // Restore chat history or show welcome message
       const hasHistory = restoreChatHistory();
       if (!hasHistory) {
-        addMsg('ai', 'Hi! I\'m your AI content editor. Tell me what you\'d like to change — for example:<br><br>• "Make the headline shorter and more direct"<br>• "Add a new service about chatbot development"<br>• "Update the email address to hello@example.com"<br><br>Switch page tabs above to preview different pages.');
+        addMsg('ai', 'Hi! I\'m your AI content editor. You can chat with me naturally — ask questions, get suggestions, or request changes.<br><br>Try things like:<br>• "What\'s the current headline?"<br>• "What can I change on this page?"<br>• "Make the headline shorter and more direct"<br>• "Update the email address to hello@example.com"<br><br>Switch page tabs above to preview different pages.');
       }
     } catch (err) {
       setStatus('Error', 'error');
