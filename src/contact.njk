@@ -21,9 +21,19 @@ permalink: /contact/
         <p class="contact-label">{{ site.contact.emailLabel }}</p>
         <p class="contact-email">
           <a href="mailto:{{ site.contact.email }}">{{ site.contact.email }}</a>
-          <button class="copy-btn" onclick="navigator.clipboard.writeText('{{ site.contact.email }}').then(function(){var b=document.querySelector('.copy-btn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy';},2000);})">Copy</button>
+          <button class="copy-btn" id="copy-email-btn">Copy</button>
         </p>
       </div>
+      <script>
+        document.getElementById('copy-email-btn').addEventListener('click', function() {
+          var email = document.querySelector('.contact-email a').textContent;
+          navigator.clipboard.writeText(email).then(function() {
+            var btn = document.getElementById('copy-email-btn');
+            btn.textContent = 'Copied!';
+            setTimeout(function() { btn.textContent = 'Copy'; }, 2000);
+          });
+        });
+      </script>
 
       {# ── Suggested email template ── #}
       <div class="email-template">

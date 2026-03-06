@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% if title %}{{ title }} — {% endif %}{{ site.meta.siteTitle }}</title>
   <meta name="description" content="{{ site.meta.siteDescription }}">
+
+  {# ── Favicon ── #}
+  <link rel="icon" href="{{ '/favicon.svg' | url }}" type="image/svg+xml">
+
+  {# ── Open Graph / Social ── #}
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="{% if title %}{{ title }} — {% endif %}{{ site.meta.siteTitle }}">
+  <meta property="og:description" content="{{ site.meta.siteDescription }}">
+  <meta property="og:site_name" content="{{ site.meta.siteTitle }}">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="{% if title %}{{ title }} — {% endif %}{{ site.meta.siteTitle }}">
+  <meta name="twitter:description" content="{{ site.meta.siteDescription }}">
+
   <link rel="stylesheet" href="{{ '/css/style.css' | url }}">
 </head>
 <body>

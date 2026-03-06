@@ -9,7 +9,7 @@ Requirements
 ------------
 - Python 3.8+
 - Ollama running locally  (http://localhost:11434)
-- A model pulled, e.g.  ollama pull llama3
+- A model pulled, e.g.  ollama pull qwen3:8b
 
 Usage
 -----
