@@ -18,10 +18,18 @@
 
 ## Fix
 
-1. **Restructure `.msg-change` as flex column with max-height** — card gets capped at 420px, diff-list scrolls internally, buttons are always pinned at button bottom via `flex-shrink: 0`.
+### Round 1
+1. **Restructure `.msg-change` as flex column with max-height** — card gets capped at 420px, diff-list scrolls internally, buttons are always pinned at bottom via `flex-shrink: 0`.
 2. **Remove `max-height` from `.diff-list`** — replaced with `flex: 1; min-height: 0;` so it fills available space and scrolls.
 3. **Remove text-based confirmation handler** — no more `confirmPattern` matching in `handleSend()`. The Apply & Publish button is the only way to confirm.
 4. **Improve `scrollChat()`** — add 300ms fallback delay to ensure card fully renders before scrolling.
+
+### Round 2
+Round 1's `max-height: 420px` + `overflow: hidden` on `.msg-change` collapsed the card, hiding diff content and buttons entirely.
+
+1. **Remove `max-height` and `overflow: hidden` from `.msg-change`** — card renders at natural height, chat container handles scrolling.
+2. **Restore `max-height: 300px` on `.diff-list`** — only the diff list scrolls internally when there are many fields; header and buttons always visible.
+3. **Remove flex layout from `.msg-change`** — no longer needed since the card is unconstrained.
 
 ## Acceptance Criteria
 
