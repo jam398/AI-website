@@ -3,7 +3,7 @@
     "siteTitle": "JM AI Consulting",
     "siteDescription": "AI consulting that turns ideas into working systems. Training, automations, and strategy for small businesses, startups, and professional services.",
     "consultant": "Jose Martinez",
-    "email": "jose--addiel@hotmail.com"
+    "email": "example@hotmail.com"
   },
   "nav": {
     "items": [
@@ -71,7 +71,7 @@
     ],
     "ctaText": "Ready to get started? Reach out today.",
     "ctaButtonLabel": "Email Jose",
-    "ctaButtonUrl": "mailto:jose--addiel@hotmail.com"
+    "ctaButtonUrl": "mailto:example@hotmail.com"
   },
   "about": {
     "pageTitle": "About",
@@ -148,13 +148,13 @@
     ],
     "ctaText": "Interested in working together? Get in touch to discuss your needs.",
     "ctaButtonLabel": "Contact Jose",
-    "ctaButtonUrl": "mailto:jose--addiel@hotmail.com"
+    "ctaButtonUrl": "mailto:example@hotmail.com"
   },
   "contact": {
     "pageTitle": "Contact",
     "intro": "JM AI Consulting is available for new engagements. All consulting is delivered remotely. To discuss your needs and explore how we can help, please reach out via email.",
     "emailLabel": "Email",
-    "email": "jose--addiel@hotmail.com",
+    "email": "example@hotmail.com",
     "templateHeading": "Suggested Email Template",
     "templateSubject": "AI Consulting Inquiry — [Your Company Name]",
     "templateBody": "Hello Jose,\n\nI'm reaching out to discuss a potential AI consulting engagement.\n\n• Company/Organization: [Name]\n• Industry: [Your industry]\n• Area of interest: [Training / Automation / Strategy / Other]\n• Brief description: [A few sentences about what you're looking to accomplish]\n• Preferred timeline: [Any relevant dates or deadlines]\n\nI look forward to hearing from you.\n\nBest regards,\n[Your Name]"
