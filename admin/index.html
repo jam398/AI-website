@@ -101,19 +101,24 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
   display: flex; align-items: center; justify-content: center; transition: all 0.15s;
 }
 .btn-icon:hover { background: var(--surface-2); color: var(--text); }
-.btn-chat {
-  padding: 7px 14px; background: var(--primary); color: #fff; border: none;
-  border-radius: var(--radius-sm); font-family: var(--font); font-size: 0.82rem;
-  font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px;
-  transition: background 0.15s;
+/* ---------- Floating Chat Button ---------- */
+.chat-fab {
+  position: fixed; bottom: 24px; right: 24px; z-index: 900;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--primary); color: #fff; border: none;
+  font-size: 1.5rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 16px rgba(59,130,246,0.4);
+  transition: all 0.2s ease;
 }
-.btn-chat:hover { background: var(--primary-hover); }
+.chat-fab:hover { background: var(--primary-hover); transform: scale(1.08); }
+.chat-fab.open { background: var(--surface-3); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
 
 /* ---------- Main Layout ---------- */
-.main-layout { display: flex; height: calc(100vh - var(--topbar-h)); }
+.main-layout { height: calc(100vh - var(--topbar-h)); }
 
 /* ---------- Preview Panel ---------- */
-.preview-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; transition: all 0.3s ease; }
+.preview-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; width: 100%; height: 100%; }
 .panel-header {
   height: 36px; min-height: 36px; background: var(--surface);
   border-bottom: 1px solid var(--border);
@@ -129,12 +134,19 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
 .preview-content { flex: 1; background: #fff; overflow: hidden; }
 .preview-content iframe { width: 100%; height: 100%; border: none; }
 
-/* ---------- Chat Panel ---------- */
+/* ---------- Chat Panel (Floating Overlay) ---------- */
 .chat-panel {
-  width: 400px; min-width: 340px; border-left: 1px solid var(--border);
-  display: flex; flex-direction: column; background: var(--bg); transition: all 0.3s ease;
+  position: fixed; bottom: 92px; right: 24px; z-index: 899;
+  width: 400px; max-width: calc(100vw - 48px); height: 520px; max-height: calc(100vh - 140px);
+  border-radius: var(--radius); border: 1px solid var(--border);
+  background: var(--bg); box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  display: flex; flex-direction: column;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  transform-origin: bottom right;
 }
-.chat-panel.hidden { width: 0; min-width: 0; overflow: hidden; opacity: 0; border: none; pointer-events: none; }
+.chat-panel.hidden {
+  transform: scale(0.8); opacity: 0; pointer-events: none;
+}
 .model-badge {
   padding: 2px 8px; background: var(--primary-soft); color: var(--primary);
   border-radius: 4px; font-size: 0.68rem; font-weight: 600;
@@ -232,7 +244,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
 @keyframes bounce { 0%,80%,100% { transform: scale(0); } 40% { transform: scale(1); } }
 
 /* ---------- Toast ---------- */
-.toast-container { position: fixed; bottom: 16px; right: 16px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
+.toast-container { position: fixed; bottom: 90px; left: 16px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
 .toast {
   padding: 10px 18px; border-radius: var(--radius-sm); font-size: 0.82rem;
   font-weight: 500; animation: slideIn 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
@@ -268,11 +280,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 768px) {
-  .main-layout { flex-direction: column; }
-  .chat-panel { width: 100% !important; min-width: 100% !important; border-left: none; border-top: 1px solid var(--border); max-height: 50vh; }
-  .chat-panel.hidden { max-height: 0; }
   .topbar-tabs { gap: 0; margin-left: 8px; }
   .tab { padding: 6px 8px; font-size: 0.75rem; }
+  .chat-panel { width: calc(100vw - 32px); right: 16px; bottom: 84px; height: 60vh; }
+  .chat-fab { bottom: 16px; right: 16px; width: 50px; height: 50px; font-size: 1.3rem; }
 }
   </style>
 </head>
@@ -313,7 +324,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
         <span class="status" id="status">● Loading...</span>
         <button class="btn-icon" onclick="openSettings()" title="Settings">⚙</button>
         <button class="btn-icon" onclick="logOut()" title="Log out & clear keys">🚪</button>
-        <button class="btn-chat" id="chat-toggle" onclick="toggleChat()">💬 Chat</button>
       </div>
     </header>
 
@@ -330,23 +340,25 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
         </div>
       </div>
 
-      <!-- Chat -->
-      <div class="chat-panel" id="chat-panel">
-        <div class="panel-header">
-          <span>AI Editor</span>
-          <span style="display:flex;align-items:center;gap:8px">
-            <span class="model-badge">GPT-4o</span>
-            <button class="btn-icon" onclick="clearChatHistory()" title="Clear chat history" style="width:26px;height:26px;font-size:0.72rem">🗑️</button>
-          </span>
-        </div>
-        <div class="chat-messages" id="chat-messages"></div>
-        <div class="quick-actions" id="quick-actions"></div>
-        <div class="chat-input-area">
-          <textarea id="chat-input" placeholder="Tell me what to change…" rows="2"></textarea>
-          <button class="btn-send" id="btn-send" onclick="handleSend()">Send</button>
-        </div>
+    </div>
+
+    <!-- Floating Chat -->
+    <div class="chat-panel hidden" id="chat-panel">
+      <div class="panel-header" style="border-radius:var(--radius) var(--radius) 0 0">
+        <span>AI Editor</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span class="model-badge">GPT-4o</span>
+          <button class="btn-icon" onclick="clearChatHistory()" title="Clear chat history" style="width:26px;height:26px;font-size:0.72rem">🗑️</button>
+        </span>
+      </div>
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="quick-actions" id="quick-actions"></div>
+      <div class="chat-input-area" style="border-radius:0 0 var(--radius) var(--radius)">
+        <textarea id="chat-input" placeholder="Tell me what to change…" rows="2"></textarea>
+        <button class="btn-send" id="btn-send" onclick="handleSend()">Send</button>
       </div>
     </div>
+    <button class="chat-fab" id="chat-toggle" onclick="toggleChat()" title="Open AI Chat">💬</button>
   </div>
 
   <!-- ════════════════════ SETTINGS MODAL ════════════════════ -->
@@ -436,7 +448,7 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     siteCSS: '',
     fileSha: '',
     currentPage: 'home',
-    chatOpen: true,
+    chatOpen: false,
     isLoading: false,
     pendingChanges: {},
     chatContext: []   // conversation history for AI context
@@ -1041,10 +1053,13 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     const btn = document.getElementById('chat-toggle');
     if (state.chatOpen) {
       panel.classList.remove('hidden');
-      btn.innerHTML = '✕ Close';
+      btn.innerHTML = '✕';
+      btn.classList.add('open');
+      scrollChat();
     } else {
       panel.classList.add('hidden');
-      btn.innerHTML = '💬 Chat';
+      btn.innerHTML = '💬';
+      btn.classList.remove('open');
     }
   };
 
