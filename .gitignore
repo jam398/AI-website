@@ -9,6 +9,10 @@ nul
 # Android app (built separately in Android Studio)
 android/
 
-# Optional MCP bridge & server (not needed — tools run in-browser)
+# Legacy local MCP files (replaced by remote Cloudflare Worker)
 tools/mcp-bridge/
 tools/site-editor-mcp/
+
+# Cloudflare Worker build artifacts
+tools/mcp-remote/node_modules/
+tools/mcp-remote/.wrangler/

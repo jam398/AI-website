@@ -185,13 +185,13 @@ Clicking a quick action fills the chat input with that text. You can edit it bef
 
 ---
 
-## Built-in Tools
+## MCP Tools
 
-The admin panel includes **10 built-in tools** that the AI chatbot can use automatically. These run entirely in your browser — no local server or extra setup required. Just ask the AI in natural language:
+The admin panel connects to a **remote MCP (Model Context Protocol) server** deployed as a Cloudflare Worker. This gives you 10 tools that work with the admin panel, VS Code, Claude Desktop, and the Android app. Just ask the AI in natural language:
 
 | Tool | How to Trigger | What It Does |
 |------|---------------|-------------|
-| **Read Content** | "Show me the current homepage content" | Reads `site.json` directly from memory |
+| **Read Content** | "Show me the current homepage content" | Reads `site.json` from GitHub via the MCP server |
 | **List Pages** | "What fields can I edit?" | Lists all editable fields with previews |
 | **Search Content** | "Where does it mention training?" | Finds text across all pages |
 | **Commit History** | "What changed recently?" | Shows recent commits to `site.json` |
@@ -215,9 +215,14 @@ Click any of these to run the tool instantly.
 
 ### How Tools Work Behind the Scenes
 
-When you ask for something like "analyze my SEO", the AI (GPT-4o) recognizes the intent and calls the appropriate tool function. The tool runs in your browser using the GitHub API and/or PageSpeed Insights API, then the AI interprets the results and responds in plain language.
+When you ask for something like “analyze my SEO”, the AI (GPT-4o) recognizes the intent and calls the appropriate tool function. The admin panel sends the request to your Cloudflare Worker, which executes the tool using the GitHub API, PageSpeed Insights, or OpenAI Whisper. The result is sent back to GPT-4o, which interprets it and responds in plain language.
 
-No local server, no bridge process, no extra setup — it all runs from the GitHub Pages admin panel.
+The same MCP server also works with:
+- **VS Code** — via MCP Streamable HTTP in `.vscode/mcp.json`
+- **Android app** — via REST API (`POST /api/tool`)
+- **Claude Desktop** — via MCP HTTP transport
+
+See [tools/mcp-remote/README.md](tools/mcp-remote/README.md) for deployment and configuration details.
 
 ---
 
@@ -229,6 +234,7 @@ Click the gear icon in the top bar to update your:
 - OpenAI API key
 - GitHub token
 - Repository name
+- MCP Server URL (your Cloudflare Worker URL)
 
 ### Logout (🚪 button)
 

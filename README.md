@@ -14,7 +14,7 @@ All site content lives in **one file** (`content/site.json`). Update that file a
 | **Hosting** | GitHub Pages (free) |
 | **Content source** | `content/site.json` — single source of truth |
 | **Content editing** | AI-powered admin panel at `/admin` (GPT-4o chatbot) |
-| **Built-in tools** | SEO analysis, deploy status, backups, social post generator, Lighthouse audit, audio transcription — all run in-browser, no server needed |
+| **MCP tools** | SEO analysis, deploy status, backups, social post generator, Lighthouse audit, audio transcription — via remote Cloudflare Worker |
 | **CI/CD** | GitHub Actions — auto-builds on every push to `main` |
 | **Optional local AI** | Ollama terminal tool in `tools/` (free, offline) |
 
@@ -75,11 +75,12 @@ See the [Admin Panel Setup](#admin-panel-setup-admin) section below, or the full
 │   └── css/
 │       └── style.css          ← Stylesheet
 ├── admin/
-│   └── index.html             ← AI admin panel (GPT-4o chatbot + built-in tools)
+│   └── index.html             ← AI admin panel (GPT-4o chatbot + MCP tools)
 ├── public/
 │   ├── .nojekyll              ← Tells GitHub not to use Jekyll
 │   └── favicon.svg            ← Site favicon
 ├── tools/
+│   ├── mcp-remote/            ← MCP tool server (Cloudflare Worker)
 │   └── ollama-helper.py       ← Optional local AI content editor (Ollama)
 ├── sprint/                    ← Sprint tracking (completed & planned)
 ├── .github/workflows/
@@ -115,7 +116,7 @@ See the [Admin Panel Setup](#admin-panel-setup-admin) section below, or the full
 
 The `/admin` route provides an AI-powered content editor that lets you update your site using natural language. It uses **OpenAI GPT-4o** to interpret your instructions and commits changes to `content/site.json` via the GitHub API.
 
-The admin panel also includes **10 built-in tools** that run entirely in the browser — no local server required:
+The admin panel connects to a **remote MCP tool server** (Cloudflare Worker) for 10 tools. The same server also works with VS Code, Claude Desktop, and the Android app:
 
 | Tool | What It Does |
 |------|-------------|
@@ -129,6 +130,7 @@ The admin panel also includes **10 built-in tools** that run entirely in the bro
 **What you need:**
 - An **OpenAI API key** (~$5 credit) — [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 - A **GitHub Fine-grained Personal Access Token** with Contents: Read and write on your repo — [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)
+- A **Cloudflare Worker URL** for the MCP server — see [tools/mcp-remote/README.md](tools/mcp-remote/README.md) for deploy instructions
 
 **How it works:**
 1. Open `https://YOUR-USERNAME.github.io/YOUR-REPO/admin/`
