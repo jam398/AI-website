@@ -4,6 +4,11 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+nul
 
 # Android app (built separately in Android Studio)
 android/
+
+# Optional MCP bridge & server (not needed — tools run in-browser)
+tools/mcp-bridge/
+tools/site-editor-mcp/

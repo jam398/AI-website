@@ -77,6 +77,19 @@ This proves the same principle: **edit one JSON file → site rebuilds automatic
 
 ---
 
+## Bonus: Try the Built-in Tools
+
+After completing the basic edit/publish demo, try these built-in tools — they run entirely in the browser with no extra setup:
+
+1. Type **"Analyze my SEO"** — the AI scores each page and suggests improvements.
+2. Type **"Check deploy status"** — shows your most recent GitHub Actions runs.
+3. Click the **📦 Backup** quick-action button — saves a snapshot of your site content.
+4. Type **"Write a LinkedIn post about my services"** — generates a ready-to-post social media update.
+
+All 10 built-in tools are documented in [MANUAL.md — Built-in Tools](MANUAL.md#built-in-tools).
+
+---
+
 ## What This Proves
 
 | Requirement | Demonstrated |

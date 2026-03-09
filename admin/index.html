@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://api.github.com https://raw.githubusercontent.com https://api.openai.com; frame-src blob: data:; img-src 'self' data:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://api.github.com https://raw.githubusercontent.com https://api.openai.com https://www.googleapis.com; frame-src blob: data:; img-src 'self' data:">
   <title>Admin — JM AI Consulting</title>
   <style>
 /* ═══════════════════════════════════════════════════════════
@@ -278,6 +278,29 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 3px; }
 
+/* ---------- MCP Status ---------- */
+.mcp-badge {
+  padding: 2px 8px; border-radius: 4px; font-size: 0.68rem; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.mcp-badge.connected { background: var(--success-soft); color: var(--success); }
+.mcp-badge.disconnected { background: var(--surface-2); color: var(--text-dim); }
+.mcp-tools-list {
+  padding: 8px 14px 4px; display: flex; flex-wrap: wrap; gap: 5px;
+}
+.mcp-tool-btn {
+  padding: 4px 10px; background: var(--primary-soft); border: 1px solid transparent;
+  border-radius: 12px; color: var(--primary); font-family: var(--font);
+  font-size: 0.7rem; cursor: pointer; transition: all 0.15s;
+}
+.mcp-tool-btn:hover { border-color: var(--primary); background: var(--primary); color: #fff; }
+.tool-result {
+  align-self: stretch; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px; font-size: 0.8rem;
+  white-space: pre-wrap; word-break: break-word; max-height: 350px; overflow-y: auto;
+  animation: fadeIn 0.3s ease;
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 768px) {
   .topbar-tabs { gap: 0; margin-left: 8px; }
@@ -348,6 +371,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
         <span>AI Editor</span>
         <span style="display:flex;align-items:center;gap:8px">
           <span class="model-badge">GPT-4o</span>
+          <span class="mcp-badge connected" id="mcp-status" title="Built-in Tools">Tools ✓</span>
           <button class="btn-icon" onclick="clearChatHistory()" title="Clear chat history" style="width:26px;height:26px;font-size:0.72rem">🗑️</button>
         </span>
       </div>
@@ -451,7 +475,8 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     chatOpen: false,
     isLoading: false,
     pendingChanges: {},
-    chatContext: []   // conversation history for AI context
+    chatContext: [],   // conversation history for AI context
+    toolsReady: true
   };
 
   /* ========== UTILITIES ========== */
@@ -634,11 +659,336 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     state.siteCSS = '/* CSS could not be loaded */';
   }
 
+  /* ========== BROWSER-NATIVE TOOLS ========== */
+  const TOOL_DEFINITIONS = [
+    { name: 'read_content', description: 'Read the current site.json content. Returns all page content.', parameters: { type: 'object', properties: { page: { type: 'string', description: 'Optional: specific page section (home, about, services, contact, meta, footer). Omit for full content.' } } } },
+    { name: 'list_pages', description: 'List all available pages and their editable fields.', parameters: { type: 'object', properties: {} } },
+    { name: 'search_content', description: 'Search for text across all site content. Returns matching fields with paths.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Text to search for (case-insensitive)' } }, required: ['query'] } },
+    { name: 'get_history', description: 'Show recent commit history for site.json.', parameters: { type: 'object', properties: { limit: { type: 'number', description: 'Number of commits to show (default: 10, max: 30)' } } } },
+    { name: 'analyze_seo', description: 'Analyze site content for SEO quality. Returns scores, issues, and recommendations.', parameters: { type: 'object', properties: { page: { type: 'string', description: 'Optional: specific page (home, about, services, contact). Omit for all.' } } } },
+    { name: 'check_deploy', description: 'Check GitHub Actions deploy status.', parameters: { type: 'object', properties: { limit: { type: 'number', description: 'Number of recent deploys to show (default: 5, max: 20)' } } } },
+    { name: 'backup_site', description: 'Create, list, or restore site.json backups stored in the Git repository.', parameters: { type: 'object', properties: { action: { type: 'string', enum: ['backup', 'list', 'restore'], description: 'Action: backup (create new), list (show all), restore (restore from backup)' }, backup_id: { type: 'string', description: 'Required for restore: the backup filename to restore from' } }, required: ['action'] } },
+    { name: 'generate_social', description: 'Generate social media posts from site content for LinkedIn, Twitter/X, or Facebook.', parameters: { type: 'object', properties: { platform: { type: 'string', enum: ['linkedin', 'twitter', 'facebook'], description: 'Target platform' }, topic: { type: 'string', description: 'Optional: specific topic or angle' }, page: { type: 'string', description: 'Optional: page to use as content source' }, tone: { type: 'string', enum: ['professional', 'casual', 'thought-leader'], description: 'Tone (default: professional)' } }, required: ['platform'] } },
+    { name: 'lighthouse_audit', description: 'Run a Google Lighthouse audit on the live site via PageSpeed Insights API.', parameters: { type: 'object', properties: { url: { type: 'string', description: 'Optional: URL to audit. Defaults to the live GitHub Pages URL.' }, categories: { type: 'array', items: { type: 'string', enum: ['performance', 'accessibility', 'best-practices', 'seo'] }, description: 'Optional: categories to audit. Defaults to all.' } } } },
+    { name: 'transcribe_audio', description: 'Transcribe an uploaded audio file to text using OpenAI Whisper API. Supports mp3, wav, m4a, mp4, webm.', parameters: { type: 'object', properties: { action: { type: 'string', enum: ['transcribe', 'summarize'], description: 'transcribe (full text) or summarize (key points). Default: transcribe' } } } }
+  ];
+
+  function buildToolsForOpenAI() {
+    return TOOL_DEFINITIONS.map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }));
+  }
+
+  // Helper: GitHub API wrapper
+  async function ghAPI(endpoint, options = {}) {
+    const url = endpoint.startsWith('http') ? endpoint : `https://api.github.com${endpoint}`;
+    const headers = { 'Accept': 'application/vnd.github.v3+json', 'Authorization': `Bearer ${state.githubToken}` };
+    if (options.body) headers['Content-Type'] = 'application/json';
+    const r = await fetch(url, { ...options, headers: { ...headers, ...options.headers } });
+    return r;
+  }
+
+  // ── Tool: read_content
+  async function toolReadContent(args) {
+    if (args.page && state.siteData[args.page]) return JSON.stringify(state.siteData[args.page], null, 2);
+    return JSON.stringify(state.siteData, null, 2);
+  }
+
+  // ── Tool: list_pages
+  async function toolListPages() {
+    function listFields(obj, prefix) {
+      const fields = [];
+      for (const [k, v] of Object.entries(obj)) {
+        const p = prefix ? `${prefix}.${k}` : k;
+        if (typeof v === 'object' && v !== null && !Array.isArray(v)) { fields.push(...listFields(v, p)); }
+        else { const preview = String(typeof v === 'string' ? v : JSON.stringify(v)).substring(0, 60); fields.push(`${p}: ${preview}${String(v).length > 60 ? '\u2026' : ''}`); }
+      }
+      return fields;
+    }
+    let output = 'Available pages and fields:\n\n';
+    for (const section of ['meta', 'nav', 'home', 'about', 'services', 'contact', 'footer']) {
+      if (state.siteData[section]) { output += `\u2500\u2500 ${section.toUpperCase()} \u2500\u2500\n` + listFields(state.siteData[section], section).join('\n') + '\n\n'; }
+    }
+    return output;
+  }
+
+  // ── Tool: search_content
+  async function toolSearchContent(args) {
+    const query = (args.query || '').toLowerCase();
+    function search(obj, prefix) {
+      const matches = [];
+      for (const [k, v] of Object.entries(obj)) {
+        const p = prefix ? `${prefix}.${k}` : k;
+        if (typeof v === 'string' && v.toLowerCase().includes(query)) matches.push({ path: p, value: v });
+        else if (typeof v === 'object' && v !== null) matches.push(...search(v, p));
+      }
+      return matches;
+    }
+    const matches = search(state.siteData, '');
+    if (matches.length === 0) return `No matches found for "${args.query}"`;
+    let output = `Found ${matches.length} match(es) for "${args.query}":\n\n`;
+    for (const m of matches) output += `\ud83d\udccd ${m.path}\n   "${m.value.substring(0, 150)}${m.value.length > 150 ? '\u2026' : ''}"\n\n`;
+    return output;
+  }
+
+  // ── Tool: get_history
+  async function toolGetHistory(args) {
+    const limit = Math.min(args.limit || 10, 30);
+    const r = await ghAPI(`/repos/${state.repo}/commits?path=content/site.json&per_page=${limit}&sha=main`);
+    if (!r.ok) return `Error fetching history: HTTP ${r.status}`;
+    const commits = await r.json();
+    if (commits.length === 0) return 'No commits found for site.json';
+    let output = `Last ${commits.length} changes to site.json:\n\n`;
+    for (const c of commits) {
+      output += `  ${c.sha.substring(0, 7)} \u2014 ${new Date(c.commit.author.date).toLocaleString()}\n  ${c.commit.message.substring(0, 80)}\n\n`;
+    }
+    return output;
+  }
+
+  // ── Tool: analyze_seo
+  async function toolAnalyzeSEO(args) {
+    const KEYWORDS = ['ai', 'artificial intelligence', 'consulting', 'automation', 'strategy', 'training', 'business', 'machine learning'];
+    function charCount(s) { return s ? [...s].length : 0; }
+    function wordCount(s) { return s ? s.split(/\s+/).filter(Boolean).length : 0; }
+    function gatherText(obj) {
+      let t = '';
+      for (const v of Object.values(obj)) {
+        if (typeof v === 'string') t += v + ' ';
+        else if (Array.isArray(v)) v.forEach(i => { if (typeof i === 'string') t += i + ' '; else if (typeof i === 'object' && i) t += gatherText(i) + ' '; });
+        else if (typeof v === 'object' && v) t += gatherText(v) + ' ';
+      }
+      return t;
+    }
+    function analyzePage(name, pageData) {
+      const issues = []; let score = 100;
+      const title = state.siteData.meta.siteTitle + (pageData.pageTitle ? ` \u2014 ${pageData.pageTitle}` : '');
+      const tl = charCount(title);
+      if (tl > 60) { issues.push(`\u26a0 Title too long: ${tl} chars (optimal: 50-60)`); score -= 5; }
+      else if (tl < 30) { issues.push(`\u26a0 Title too short: ${tl} chars (optimal: 50-60)`); score -= 5; }
+      const desc = state.siteData.meta.siteDescription || '';
+      const dl = charCount(desc);
+      if (dl === 0) { issues.push('\u2717 Meta description is missing'); score -= 15; }
+      else if (dl > 160) { issues.push(`\u26a0 Meta description too long: ${dl} chars`); score -= 5; }
+      else if (dl < 120) { issues.push(`\u2139 Meta description could be longer: ${dl} chars`); score -= 2; }
+      const h1 = pageData.headline || pageData.pageTitle || '';
+      if (!h1) { issues.push('\u2717 No H1 heading found'); score -= 15; }
+      const allText = gatherText(pageData).toLowerCase();
+      const wc = wordCount(allText);
+      if (wc < 100) { issues.push(`\u26a0 Low content: ${wc} words (min 100 recommended)`); score -= 10; }
+      const foundKW = KEYWORDS.filter(kw => allText.includes(kw));
+      if (foundKW.length < 3) { issues.push(`\u2139 Only ${foundKW.length} keywords found. Add: ${KEYWORDS.filter(k => !allText.includes(k)).join(', ')}`); score -= 5; }
+      const hasCTA = pageData.ctaButtonLabel || pageData.ctaText || name === 'contact';
+      if (!hasCTA) { issues.push('\u26a0 No call-to-action found'); score -= 10; }
+      return { name, score: Math.max(0, score), issues, wc, foundKW };
+    }
+    const pages = args.page ? [args.page] : ['home', 'about', 'services', 'contact'];
+    const results = pages.filter(p => state.siteData[p]).map(p => analyzePage(p, state.siteData[p]));
+    const overall = Math.round(results.reduce((s, r) => s + r.score, 0) / results.length);
+    let output = `\ud83d\udd0d SEO Analysis \u2014 Overall: ${overall}/100\n\n`;
+    for (const r of results) {
+      const icon = r.score >= 90 ? '\u2713' : r.score >= 70 ? '\u26a0' : '\u2717';
+      output += `\u2500\u2500 ${r.name.toUpperCase()} (${r.score}/100 ${icon}) \u2500\u2500\n   Words: ${r.wc} | Keywords: ${r.foundKW.join(', ')}\n`;
+      if (r.issues.length) { output += '   Issues:\n'; r.issues.forEach(i => output += `     ${i}\n`); }
+      output += '\n';
+    }
+    return output;
+  }
+
+  // ── Tool: check_deploy
+  async function toolCheckDeploy(args) {
+    const limit = Math.min(args.limit || 5, 20);
+    const r = await ghAPI(`/repos/${state.repo}/actions/runs?per_page=${limit}`);
+    if (!r.ok) return `Error checking deploys: HTTP ${r.status}`;
+    const body = await r.json();
+    const runs = body.workflow_runs || [];
+    if (runs.length === 0) return 'No deploys found. Push to main to trigger your first deploy.';
+    const deployRuns = runs.filter(w => w.name.toLowerCase().includes('deploy') || w.name.toLowerCase().includes('pages'));
+    const toShow = deployRuns.length > 0 ? deployRuns : runs.slice(0, limit);
+    let output = `\ud83d\ude80 Deploy Status \u2014 ${getLiveUrl()}\n\n`;
+    toShow.forEach((w, i) => {
+      const status = w.conclusion || w.status;
+      const icon = status === 'success' ? '\u2713' : status === 'failure' ? '\u2717' : status === 'in_progress' ? '\u23f3' : '?';
+      const dur = w.updated_at && w.created_at ? Math.round((new Date(w.updated_at) - new Date(w.created_at)) / 1000) : null;
+      output += `  ${i + 1}. ${icon} ${(status || 'UNKNOWN').toUpperCase()}\n     "${(w.head_commit?.message || 'No message').substring(0, 72)}"\n     ${new Date(w.created_at).toLocaleString()}${dur ? ` (${dur}s)` : ''}\n\n`;
+    });
+    return output;
+  }
+
+  // ── Tool: backup_site
+  async function toolBackupSite(args) {
+    if (args.action === 'backup') {
+      const r = await ghAPI(`/repos/${state.repo}/contents/content/site.json?ref=main`);
+      if (!r.ok) return 'Error reading current content';
+      const fileData = await r.json();
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+      const id = `backup-${ts}`;
+      const putR = await ghAPI(`/repos/${state.repo}/contents/_backups/${id}.json`, {
+        method: 'PUT', body: JSON.stringify({ message: `backup: ${id}`, content: fileData.content.replace(/\n/g, ''), branch: 'main' })
+      });
+      if (putR.ok) {
+        const size = Math.round(atob(fileData.content.replace(/\n/g, '')).length / 1024 * 10) / 10;
+        return `\u2713 Backup created!\n  ID: ${id}\n  Size: ${size} KB`;
+      }
+      return `Error creating backup: HTTP ${putR.status}`;
+    }
+    if (args.action === 'list') {
+      const r = await ghAPI(`/repos/${state.repo}/contents/_backups?ref=main`);
+      if (r.status === 404) return 'No backups found. Ask me to create one.';
+      if (!r.ok) return `Error listing backups: HTTP ${r.status}`;
+      const files = await r.json();
+      if (!Array.isArray(files) || files.length === 0) return 'No backups found.';
+      let output = `\ud83d\udce6 Available backups (${files.length}):\n\n`;
+      for (const f of files.sort((a, b) => b.name.localeCompare(a.name))) {
+        output += `  ${f.name.replace('.json', '')} (${(f.size ? Math.round(f.size / 1024 * 10) / 10 : '?')} KB)\n`;
+      }
+      return output;
+    }
+    if (args.action === 'restore') {
+      if (!args.backup_id) return 'Error: backup_id is required. Ask me to list backups first.';
+      const bR = await ghAPI(`/repos/${state.repo}/contents/_backups/${args.backup_id}.json?ref=main`);
+      if (!bR.ok) return `Backup not found: ${args.backup_id}`;
+      const backupFile = await bR.json();
+      const backupContent = backupFile.content.replace(/\n/g, '');
+      const decoded = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(backupContent), c => c.charCodeAt(0))));
+      const curR = await ghAPI(`/repos/${state.repo}/contents/content/site.json?ref=main`);
+      if (!curR.ok) return 'Error reading current content';
+      const curFile = await curR.json();
+      const putR = await ghAPI(`/repos/${state.repo}/contents/content/site.json`, {
+        method: 'PUT', body: JSON.stringify({ message: `restore: ${args.backup_id}`, content: backupContent, sha: curFile.sha, branch: 'main' })
+      });
+      if (putR.ok) {
+        state.siteData = decoded;
+        state.fileSha = (await putR.json()).content.sha;
+        updatePreview();
+        return `\u2713 Restored from ${args.backup_id}! Site will rebuild in ~1 minute.`;
+      }
+      return `Error restoring: HTTP ${putR.status}`;
+    }
+    return `Unknown action: ${args.action}. Use: backup, list, or restore.`;
+  }
+
+  // ── Tool: generate_social
+  async function toolGenerateSocial(args) {
+    const platform = args.platform;
+    const tone = args.tone || 'professional';
+    const pageSrc = args.page && state.siteData[args.page] ? state.siteData[args.page] : state.siteData;
+    const limits = { linkedin: 3000, twitter: 280, facebook: 63206 };
+    const charLimit = limits[platform] || 3000;
+    try {
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${state.openaiKey}` },
+        body: JSON.stringify({
+          model: 'gpt-4o', temperature: 0.7, max_tokens: 1000,
+          messages: [
+            { role: 'system', content: 'You are a social media expert. Generate engaging posts.' },
+            { role: 'user', content: `Generate a ${platform} post for "${state.siteData.meta.siteTitle}" by ${state.siteData.meta.consultant}.\nTone: ${tone}, max ${charLimit} chars.${args.topic ? ` Topic: ${args.topic}` : ''}\nContext: ${JSON.stringify(pageSrc, null, 2)}\nRequirements: stay within limit, include hashtags, be engaging. Return ONLY the post text.` }
+          ]
+        })
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const post = d.choices[0].message.content.trim();
+        const cl = [...post].length;
+        return `\ud83d\udcf1 ${platform.toUpperCase()} Post (${tone})\n\n${post}\n\nCharacters: ${cl}/${charLimit}${cl > charLimit ? ' \u26a0 OVER LIMIT' : ' \u2713'}`;
+      }
+    } catch (_) {}
+    const templates = {
+      linkedin: `\ud83e\udd16 AI isn't just for tech giants.\n\nAt ${state.siteData.meta.siteTitle}, I help businesses:\n\u2192 Build AI strategy\n\u2192 Implement automation\n\u2192 Train teams\n\n\u2709\ufe0f ${state.siteData.meta.email}\n\n#AIConsulting #Automation`,
+      twitter: `\ud83e\udd16 AI consulting for real results.\nTraining \u2192 Automation \u2192 Strategy\n${state.siteData.meta.siteTitle}\n#AIConsulting`,
+      facebook: `Want to bring AI into your business?\n${state.siteData.meta.siteTitle} helps with training, automation & strategy.\n\u2709\ufe0f ${state.siteData.meta.email}\n#AIConsulting`
+    };
+    return `\ud83d\udcf1 ${platform.toUpperCase()} Post (template)\n\n${templates[platform] || templates.linkedin}`;
+  }
+
+  // ── Tool: lighthouse_audit
+  async function toolLighthouseAudit(args) {
+    const targetUrl = args.url || getLiveUrl();
+    const categories = args.categories || ['performance', 'accessibility', 'best-practices', 'seo'];
+    const catParam = categories.map(c => `&category=${c}`).join('');
+    const apiUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(targetUrl)}${catParam}&strategy=mobile`;
+    const r = await fetch(apiUrl);
+    if (!r.ok) return r.status === 400 ? `Error: Could not audit ${targetUrl}. Is the site deployed?` : `PageSpeed API error: HTTP ${r.status}`;
+    const data = await r.json();
+    const lhr = data.lighthouseResult;
+    if (!lhr) return 'No Lighthouse results returned.';
+    const catIcons = { performance: '\u26a1', accessibility: '\u267f', 'best-practices': '\u2705', seo: '\ud83d\udd0d' };
+    let output = `\ud83d\udcca Lighthouse Audit \u2014 ${targetUrl}\n   Strategy: Mobile\n\n`;
+    for (const cat of categories) {
+      const cd = lhr.categories[cat];
+      if (!cd) { output += `   ${cat}: N/A\n`; continue; }
+      const score = Math.round((cd.score || 0) * 100);
+      output += `   ${catIcons[cat] || '\ud83d\udccb'} ${cd.title}: ${score}/100 ${score >= 90 ? '\u2713' : score >= 50 ? '\u26a0' : '\u2717'}\n`;
+    }
+    output += '\n';
+    const audits = lhr.audits || {};
+    const failed = Object.values(audits).filter(a => a.score !== null && a.score < 1 && a.score !== undefined).sort((a, b) => a.score - b.score).slice(0, 10);
+    if (failed.length > 0) {
+      output += `\u2500\u2500 Top Issues \u2500\u2500\n`;
+      failed.forEach((a, i) => output += `  ${i + 1}. ${a.score === 0 ? '\u2717' : '\u26a0'} ${a.title}${a.displayValue ? ` (${a.displayValue})` : ''}\n`);
+    } else { output += '  \u2713 No critical issues found!\n'; }
+    return output;
+  }
+
+  // ── Tool: transcribe_audio (browser file upload)
+  function pickAudioFile() {
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'audio/*,.mp3,.wav,.m4a,.mp4,.webm';
+      input.onchange = () => resolve(input.files[0] || null);
+      input.click();
+    });
+  }
+
+  async function toolTranscribeAudio(args) {
+    const file = await pickAudioFile();
+    if (!file) return 'No file selected.';
+    const sizeMB = file.size / (1024 * 1024);
+    if (sizeMB > 25) return `File too large: ${sizeMB.toFixed(1)}MB (Whisper limit: 25MB).`;
+    const validExts = ['.mp3', '.wav', '.m4a', '.mp4', '.webm', '.mpeg', '.mpga'];
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!validExts.includes(ext)) return `Unsupported format: ${ext}. Supported: ${validExts.join(', ')}`;
+    const form = new FormData();
+    form.append('model', 'whisper-1');
+    form.append('file', file);
+    const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST', headers: { 'Authorization': `Bearer ${state.openaiKey}` }, body: form
+    });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); return `Transcription error: ${e.error?.message || r.status}`; }
+    const result = await r.json();
+    const transcript = result.text || '';
+    if (args.action === 'summarize') {
+      const sr = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${state.openaiKey}` },
+        body: JSON.stringify({ model: 'gpt-4o', messages: [{ role: 'system', content: 'Summarize the transcript into key points. Group by topics. Highlight action items.' }, { role: 'user', content: transcript }], temperature: 0.3, max_tokens: 2000 })
+      });
+      if (sr.ok) { const sd = await sr.json(); return `\ud83c\udf99 Summary \u2014 ${file.name} (${sizeMB.toFixed(1)}MB)\n\n${sd.choices[0].message.content}\n\n\u2500\u2500 Full Transcript \u2500\u2500\n${transcript.substring(0, 2000)}${transcript.length > 2000 ? '\u2026' : ''}`; }
+    }
+    return `\ud83c\udf99 Transcription \u2014 ${file.name} (${sizeMB.toFixed(1)}MB, ${transcript.split(/\s+/).length} words)\n\n${transcript}`;
+  }
+
+  // ── Tool Router
+  async function executeToolCall(name, args) {
+    switch (name) {
+      case 'read_content': return toolReadContent(args);
+      case 'list_pages': return toolListPages();
+      case 'search_content': return toolSearchContent(args);
+      case 'get_history': return toolGetHistory(args);
+      case 'analyze_seo': return toolAnalyzeSEO(args);
+      case 'check_deploy': return toolCheckDeploy(args);
+      case 'backup_site': return toolBackupSite(args);
+      case 'generate_social': return toolGenerateSocial(args);
+      case 'lighthouse_audit': return toolLighthouseAudit(args);
+      case 'transcribe_audio': return toolTranscribeAudio(args);
+      default: return `Unknown tool: ${name}`;
+    }
+  }
+
   /* ========== OPENAI API ========== */
   async function callAI(instruction) {
     // Build conversation messages with context
     const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: SYSTEM_PROMPT + '\n\nYou also have built-in tools available. Use them when the user asks for SEO analysis, deploy status, backups, social media posts, lighthouse audits, or audio transcription. Call the appropriate tool instead of trying to do it yourself.' },
       {
         role: 'user',
         content: `Current full site.json:\n\`\`\`json\n${JSON.stringify(state.siteData, null, 2)}\n\`\`\`\n\nThe user is currently viewing the "${state.currentPage}" page.`
@@ -652,15 +1002,19 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     // Add current instruction
     messages.push({ role: 'user', content: instruction });
 
+    const tools = buildToolsForOpenAI();
+    const requestBody = {
+      model: 'gpt-4o',
+      messages,
+      temperature: 0.4,
+      max_tokens: 8192,
+      tools
+    };
+
     const r = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.openaiKey}` },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages,
-        temperature: 0.4,
-        max_tokens: 8192
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!r.ok) {
@@ -669,7 +1023,39 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     }
 
     const d = await r.json();
-    return d.choices[0].message.content.trim();
+    const choice = d.choices[0];
+
+    // Handle function calling (MCP tool invocation)
+    if (choice.finish_reason === 'tool_calls' && choice.message.tool_calls) {
+      const toolResults = [];
+      for (const tc of choice.message.tool_calls) {
+        const toolName = tc.function.name;
+        const toolArgs = JSON.parse(tc.function.arguments || '{}');
+        try {
+          const result = await executeToolCall(toolName, toolArgs);
+          toolResults.push({ tool: toolName, result, id: tc.id });
+        } catch (err) {
+          toolResults.push({ tool: toolName, result: `Error: ${err.message}`, id: tc.id });
+        }
+      }
+
+      // Send tool results back to GPT-4o for final response
+      messages.push(choice.message);
+      for (const tr of toolResults) {
+        messages.push({ role: 'tool', tool_call_id: tr.id, content: tr.result });
+      }
+
+      const r2 = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.openaiKey}` },
+        body: JSON.stringify({ model: 'gpt-4o', messages, temperature: 0.4, max_tokens: 8192 })
+      });
+      if (!r2.ok) throw new Error(`OpenAI API ${r2.status}`);
+      const d2 = await r2.json();
+      return d2.choices[0].message.content.trim();
+    }
+
+    return choice.message.content.trim();
   }
 
   /** Try to extract JSON from AI response. Returns parsed object or null. */
@@ -1084,14 +1470,37 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
   }
 
   /* ========== QUICK ACTIONS ========== */
+  const MCP_QUICK_ACTIONS = [
+    { label: '🔍 SEO Analysis', text: 'Analyze my SEO' },
+    { label: '🚀 Deploy Status', text: 'Check my deploy status' },
+    { label: '📦 Backup', text: 'Backup my site' },
+    { label: '📱 LinkedIn Post', text: 'Write a LinkedIn post about my services' },
+    { label: '📊 Lighthouse Audit', text: 'Run a lighthouse audit' }
+  ];
+
   function updateQuickActions() {
     const container = document.getElementById('quick-actions');
     const actions = QUICK_ACTIONS[state.currentPage] || [];
-    container.innerHTML = actions.map(a => `<button class="quick-btn">${a}</button>`).join('');
-    container.querySelectorAll('.quick-btn').forEach(btn => {
+    let html = actions.map(a => `<button class="quick-btn">${a}</button>`).join('');
+
+    // Add tool quick actions (always available)
+    html += MCP_QUICK_ACTIONS.map(a => `<button class="quick-btn mcp-tool-btn">${a.label}</button>`).join('');
+
+    container.innerHTML = html;
+    container.querySelectorAll('.quick-btn:not(.mcp-tool-btn)').forEach(btn => {
       btn.addEventListener('click', () => {
         document.getElementById('chat-input').value = btn.textContent;
         document.getElementById('chat-input').focus();
+      });
+    });
+    container.querySelectorAll('.mcp-tool-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const label = btn.textContent;
+        const action = MCP_QUICK_ACTIONS.find(a => a.label === label);
+        if (action) {
+          document.getElementById('chat-input').value = action.text;
+          handleSend();
+        }
       });
     });
   }
@@ -1138,7 +1547,7 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
       // Restore chat history or show welcome message
       const hasHistory = restoreChatHistory();
       if (!hasHistory) {
-        addMsg('ai', 'Hi! I\'m your AI content editor. You can chat with me naturally — ask questions, get suggestions, or request changes.<br><br>Try things like:<br>• "What\'s the current headline?"<br>• "What can I change on this page?"<br>• "Make the headline shorter and more direct"<br>• "Update the email address to hello@example.com"<br><br>Switch page tabs above to preview different pages.');
+        addMsg('ai', 'Hi! I\'m your AI content editor. You can chat with me naturally — ask questions, get suggestions, or request changes.<br><br>Try things like:<br>• "What\'s the current headline?"<br>• "What can I change on this page?"<br>• "Make the headline shorter and more direct"<br>• "Update the email address to hello@example.com"<br><br>🔧 <strong>Built-in tools:</strong><br>• 🔍 SEO Analysis<br>• 🚀 Deploy Status<br>• 📦 Backup & Restore<br>• 📱 Social Post Generator<br>• 📊 Lighthouse Audit<br>• 🎤 Audio Transcription<br><br>Switch page tabs above to preview different pages.');
       }
     } catch (err) {
       setStatus('Error', 'error');

@@ -14,6 +14,7 @@ All site content lives in **one file** (`content/site.json`). Update that file a
 | **Hosting** | GitHub Pages (free) |
 | **Content source** | `content/site.json` — single source of truth |
 | **Content editing** | AI-powered admin panel at `/admin` (GPT-4o chatbot) |
+| **Built-in tools** | SEO analysis, deploy status, backups, social post generator, Lighthouse audit, audio transcription — all run in-browser, no server needed |
 | **CI/CD** | GitHub Actions — auto-builds on every push to `main` |
 | **Optional local AI** | Ollama terminal tool in `tools/` (free, offline) |
 
@@ -74,12 +75,13 @@ See the [Admin Panel Setup](#admin-panel-setup-admin) section below, or the full
 │   └── css/
 │       └── style.css          ← Stylesheet
 ├── admin/
-│   └── index.html             ← AI admin panel (GPT-4o chatbot + GitHub publish)
+│   └── index.html             ← AI admin panel (GPT-4o chatbot + built-in tools)
 ├── public/
 │   ├── .nojekyll              ← Tells GitHub not to use Jekyll
 │   └── favicon.svg            ← Site favicon
 ├── tools/
 │   └── ollama-helper.py       ← Optional local AI content editor (Ollama)
+├── sprint/                    ← Sprint tracking (completed & planned)
 ├── .github/workflows/
 │   └── deploy.yml             ← GitHub Actions: build + deploy
 ├── .eleventy.js               ← Eleventy configuration
@@ -112,6 +114,17 @@ See the [Admin Panel Setup](#admin-panel-setup-admin) section below, or the full
 ## Admin Panel Setup (`/admin`)
 
 The `/admin` route provides an AI-powered content editor that lets you update your site using natural language. It uses **OpenAI GPT-4o** to interpret your instructions and commits changes to `content/site.json` via the GitHub API.
+
+The admin panel also includes **10 built-in tools** that run entirely in the browser — no local server required:
+
+| Tool | What It Does |
+|------|-------------|
+| **SEO Analysis** | Scores each page 0–100 for title, meta description, keywords, content length |
+| **Deploy Status** | Shows recent GitHub Actions workflow runs (success/failure/in-progress) |
+| **Backup & Restore** | Creates/lists/restores `site.json` backups in the repo's `_backups/` folder |
+| **Social Post Generator** | AI-generated posts for LinkedIn, Twitter/X, or Facebook from your content |
+| **Lighthouse Audit** | Runs Google PageSpeed Insights (performance, accessibility, SEO scores) |
+| **Audio Transcription** | Upload an audio file → transcribed via OpenAI Whisper, with optional summary |
 
 **What you need:**
 - An **OpenAI API key** (~$5 credit) — [platform.openai.com/api-keys](https://platform.openai.com/api-keys)

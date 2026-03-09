@@ -185,6 +185,42 @@ Clicking a quick action fills the chat input with that text. You can edit it bef
 
 ---
 
+## Built-in Tools
+
+The admin panel includes **10 built-in tools** that the AI chatbot can use automatically. These run entirely in your browser — no local server or extra setup required. Just ask the AI in natural language:
+
+| Tool | How to Trigger | What It Does |
+|------|---------------|-------------|
+| **Read Content** | "Show me the current homepage content" | Reads `site.json` directly from memory |
+| **List Pages** | "What fields can I edit?" | Lists all editable fields with previews |
+| **Search Content** | "Where does it mention training?" | Finds text across all pages |
+| **Commit History** | "What changed recently?" | Shows recent commits to `site.json` |
+| **SEO Analysis** | "Analyze my SEO" | Scores pages 0–100 (title, meta, keywords, content length, CTAs) |
+| **Deploy Status** | "Check my deploy status" | Shows GitHub Actions runs (success/failure/in-progress) |
+| **Backup & Restore** | "Backup my site" / "List backups" / "Restore from backup-..." | Creates/lists/restores `site.json` snapshots in `_backups/` |
+| **Social Post Generator** | "Write a LinkedIn post about my services" | AI-generated posts for LinkedIn, Twitter/X, or Facebook |
+| **Lighthouse Audit** | "Run a lighthouse audit" | Google PageSpeed Insights scores (performance, accessibility, SEO) |
+| **Audio Transcription** | "Transcribe an audio file" | Opens a file picker → transcribes via OpenAI Whisper |
+
+### Quick Tool Buttons
+
+Below the chat, you'll also see quick-action buttons for the most common tools:
+- 🔍 SEO Analysis
+- 🚀 Deploy Status
+- 📦 Backup
+- 📱 LinkedIn Post
+- 📊 Lighthouse Audit
+
+Click any of these to run the tool instantly.
+
+### How Tools Work Behind the Scenes
+
+When you ask for something like "analyze my SEO", the AI (GPT-4o) recognizes the intent and calls the appropriate tool function. The tool runs in your browser using the GitHub API and/or PageSpeed Insights API, then the AI interprets the results and responds in plain language.
+
+No local server, no bridge process, no extra setup — it all runs from the GitHub Pages admin panel.
+
+---
+
 ## Settings & Security
 
 ### Settings (⚙ button)
