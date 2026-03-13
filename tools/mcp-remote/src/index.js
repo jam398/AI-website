@@ -18,7 +18,7 @@
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-GitHub-Token, X-OpenAI-Key, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, X-GitHub-Token, X-OpenAI-Key, Authorization, bypass-tunnel-reminder',
   'Access-Control-Max-Age': '86400',
 };
 
