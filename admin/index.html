@@ -477,6 +477,8 @@ Section reference:
 
 Maintain a professional, consulting-appropriate tone in both modes.`;
 
+  const TOOL_ERROR_PROMPT = '\nWhen an MCP tool returns an error, preserve the exact reason. Do not describe permission, quota, auth, or server errors as generic connectivity problems.';
+
   const QUICK_ACTIONS = {
     home: ['Change the headline', 'Update the subheadline', 'Edit a service card', 'Modify CTA text'],
     about: ['Rewrite the bio', 'Update focus areas', 'Change industries served'],
@@ -485,6 +487,7 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
   };
 
   const {
+    REQUIRED_SECTIONS,
     getEnabledToolDefinitions,
     getLiveUrl: computeLiveUrl,
     isLocalUrl,
@@ -856,7 +859,7 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
   async function callAI(instruction) {
     // Build conversation messages with context
     const messages = [
-      { role: 'system', content: SYSTEM_PROMPT + '\n\nYou have MCP tools available via a remote server. Use them when the user asks for SEO analysis, deploy status, backups, social media posts, lighthouse audits, or audio transcription. Call the appropriate tool instead of trying to do it yourself.' },
+      { role: 'system', content: SYSTEM_PROMPT + TOOL_ERROR_PROMPT + '\n\nYou have MCP tools available via a remote server. Use them when the user asks for SEO analysis, deploy status, backups, social media posts, lighthouse audits, or audio transcription. Call the appropriate tool instead of trying to do it yourself.' },
       {
         role: 'user',
         content: `Current full site.json:\n\`\`\`json\n${JSON.stringify(state.siteData, null, 2)}\n\`\`\`\n\nThe user is currently viewing the "${state.currentPage}" page.`
@@ -905,6 +908,11 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
         } catch (err) {
           toolResults.push({ tool: toolName, result: `Error: ${err.message}`, id: tc.id });
         }
+      }
+
+      const errorResults = toolResults.filter(tr => String(tr.result || '').startsWith('Error:'));
+      if (errorResults.length > 0 && errorResults.length === toolResults.length) {
+        return errorResults.map(tr => `${tr.tool}: ${tr.result}`).join('\n');
       }
 
       // Send tool results back to GPT-4o for final response
