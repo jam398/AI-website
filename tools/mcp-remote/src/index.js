@@ -192,7 +192,7 @@ async function toolGetHistory(args, ctx) {
   const repo = getRepo(ctx.env);
   const limit = Math.min(args.limit || 10, 30);
   const r = await ghAPI(`/repos/${repo}/commits?path=content/site.json&per_page=${limit}&sha=main`, ctx.githubToken);
-  if (!r.ok) return `Error fetching history: HTTP ${r.status}`;
+  if (!r.ok) return `Error: fetching history failed (HTTP ${r.status}).`;
   const commits = await r.json();
   if (commits.length === 0) return 'No commits found for site.json';
   let output = `Last ${commits.length} changes to site.json:\n\n`;
@@ -257,9 +257,9 @@ async function toolCheckDeploy(args, ctx) {
   const r = await ghAPI(`/repos/${repo}/actions/runs?per_page=${limit}`, ctx.githubToken);
   if (!r.ok) {
     if (r.status === 401 || r.status === 403) {
-      return 'GitHub token is missing Actions: read permission or repo access for Deploy Status.';
+      return 'Error: GitHub token is missing Actions: read permission or repo access for Deploy Status.';
     }
-    return `Error checking deploys: HTTP ${r.status}`;
+    return `Error: checking deploys failed (HTTP ${r.status}).`;
   }
   const body = await r.json();
   const runs = body.workflow_runs || [];
@@ -290,12 +290,12 @@ async function toolBackupSite(args, ctx) {
       const size = Math.round(atob(raw).length / 1024 * 10) / 10;
       return `✓ Backup created!\n  ID: ${id}\n  Size: ${size} KB`;
     }
-    return `Error creating backup: HTTP ${putR.status}`;
+    return `Error: creating backup failed (HTTP ${putR.status}).`;
   }
   if (args.action === 'list') {
     const r = await ghAPI(`/repos/${repo}/contents/_backups?ref=main`, ctx.githubToken);
     if (r.status === 404) return 'No backups found. Ask me to create one.';
-    if (!r.ok) return `Error listing backups: HTTP ${r.status}`;
+    if (!r.ok) return `Error: listing backups failed (HTTP ${r.status}).`;
     const files = await r.json();
     if (!Array.isArray(files) || files.length === 0) return 'No backups found.';
     let output = `📦 Available backups (${files.length}):\n\n`;
@@ -307,20 +307,20 @@ async function toolBackupSite(args, ctx) {
   if (args.action === 'restore') {
     if (!args.backup_id) return 'Error: backup_id is required. Ask me to list backups first.';
     const bR = await ghAPI(`/repos/${repo}/contents/_backups/${args.backup_id}.json?ref=main`, ctx.githubToken);
-    if (!bR.ok) return `Backup not found: ${args.backup_id}`;
+    if (!bR.ok) return `Error: backup not found: ${args.backup_id}`;
     const backupFile = await bR.json();
     const backupContent = backupFile.content.replace(/\n/g, '');
     const curR = await ghAPI(`/repos/${repo}/contents/content/site.json?ref=main`, ctx.githubToken);
-    if (!curR.ok) return 'Error reading current content';
+    if (!curR.ok) return 'Error: reading current content failed.';
     const curFile = await curR.json();
     const putR = await ghAPI(`/repos/${repo}/contents/content/site.json`, ctx.githubToken, {
       method: 'PUT',
       body: JSON.stringify({ message: `restore: ${args.backup_id}`, content: backupContent, sha: curFile.sha, branch: 'main' }),
     });
     if (putR.ok) return `✓ Restored from ${args.backup_id}! Site will rebuild in ~1 minute.`;
-    return `Error restoring: HTTP ${putR.status}`;
+    return `Error: restoring backup failed (HTTP ${putR.status}).`;
   }
-  return `Unknown action: ${args.action}. Use: backup, list, or restore.`;
+  return `Error: unknown action "${args.action}". Use: backup, list, or restore.`;
 }
 
 async function toolGenerateSocial(args, ctx) {
@@ -367,10 +367,14 @@ async function toolLighthouseAudit(args, ctx) {
   const apiUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(targetUrl)}${catParam}&strategy=mobile`;
 
   const r = await fetch(apiUrl);
-  if (!r.ok) return r.status === 400 ? `Error: Could not audit ${targetUrl}. Is the site deployed?` : `PageSpeed API error: HTTP ${r.status}`;
+  if (!r.ok) {
+    if (r.status === 400) return `Error: could not audit ${targetUrl}. Is the site deployed?`;
+    if (r.status === 429) return 'Error: Google PageSpeed quota exceeded (HTTP 429). Try again later.';
+    return `Error: PageSpeed API failed (HTTP ${r.status}).`;
+  }
   const data = await r.json();
   const lhr = data.lighthouseResult;
-  if (!lhr) return 'No Lighthouse results returned.';
+  if (!lhr) return 'Error: no Lighthouse results were returned.';
 
   const catIcons = { performance: '⚡', accessibility: '♿', 'best-practices': '✅', seo: '🔍' };
   let output = `📊 Lighthouse Audit — ${targetUrl}\n   Strategy: Mobile\n\n`;
@@ -398,14 +402,14 @@ async function toolTranscribeAudio(args, ctx) {
 
   const validExts = ['.mp3', '.wav', '.m4a', '.mp4', '.webm', '.mpeg', '.mpga'];
   const ext = '.' + args.filename.split('.').pop().toLowerCase();
-  if (!validExts.includes(ext)) return `Unsupported format: ${ext}. Supported: ${validExts.join(', ')}`;
+  if (!validExts.includes(ext)) return `Error: unsupported format: ${ext}. Supported: ${validExts.join(', ')}`;
 
   // Decode base64 to binary
   const binaryStr = atob(args.audio_base64);
   const bytes = new Uint8Array(binaryStr.length);
   for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
   const sizeMB = bytes.length / (1024 * 1024);
-  if (sizeMB > 25) return `File too large: ${sizeMB.toFixed(1)}MB (Whisper limit: 25MB).`;
+  if (sizeMB > 25) return `Error: file too large: ${sizeMB.toFixed(1)}MB (Whisper limit: 25MB).`;
 
   const blob = new Blob([bytes], { type: 'application/octet-stream' });
   const form = new FormData();
@@ -419,7 +423,7 @@ async function toolTranscribeAudio(args, ctx) {
   });
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
-    return `Transcription error: ${e.error?.message || r.status}`;
+    return `Error: transcription failed: ${e.error?.message || r.status}`;
   }
   const result = await r.json();
   const transcript = result.text || '';
