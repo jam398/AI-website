@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "MCP tool server for JM AI Consulting — Cloudflare Worker",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

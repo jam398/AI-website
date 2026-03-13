@@ -5,7 +5,10 @@
   "scripts": {
     "build": "eleventy",
     "start": "eleventy --serve",
-    "clean": "rimraf _site"
+    "clean": "rimraf _site",
+    "lint:content": "node scripts/verify-content.js",
+    "test": "node scripts/run-tests.js",
+    "verify": "npm run test && npm run lint:content && npm run build && node --check tools/mcp-remote/src/index.js && python -m py_compile tools/ollama-helper.py"
   },
   "dependencies": {
     "@11ty/eleventy": "^2.0.1"

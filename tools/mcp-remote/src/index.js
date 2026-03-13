@@ -7,18 +7,25 @@
  *   POST /api/tool      — Simple REST (admin panel, Android app)
  *   GET  /health        — Health check
  *
- * API keys are passed per-request in headers:
+ * Caller auth is required for public deployments:
+ *   X-Worker-Auth    — Shared secret configured as WORKER_SHARED_SECRET
+ *
+ * User-scoped credentials are passed per-request in headers:
  *   X-GitHub-Token   — GitHub PAT (contents:read/write, actions:read)
  *   X-OpenAI-Key     — OpenAI API key (for social posts, transcription)
- *
- * Or stored as Worker secrets (GITHUB_TOKEN, OPENAI_API_KEY) as fallback.
  */
+
+import {
+  assertToolCredentials,
+  getLiveUrlForRepo,
+  getWorkerAuthFailure,
+} from './policy.js';
 
 // ── CORS ──────────────────────────────────────────────────────
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-GitHub-Token, X-OpenAI-Key, Authorization, bypass-tunnel-reminder',
+  'Access-Control-Allow-Headers': 'Content-Type, X-GitHub-Token, X-OpenAI-Key, X-Worker-Auth, Authorization, bypass-tunnel-reminder',
   'Access-Control-Max-Age': '86400',
 };
 
@@ -101,15 +108,30 @@ function getRepo(env) {
 }
 
 function getLiveUrl(env) {
-  const [owner, repo] = getRepo(env).split('/');
-  return `https://${owner}.github.io/${repo}/`;
+  return getLiveUrlForRepo(getRepo(env));
+}
+
+function requireWorkerAuth(request, env) {
+  const { hostname } = new URL(request.url);
+  const failure = getWorkerAuthFailure({
+    hostname,
+    expectedSecret: env.WORKER_SHARED_SECRET || '',
+    providedSecret: request.headers.get('X-Worker-Auth') || '',
+  });
+  if (!failure) return null;
+  return corsResponse({ error: failure.error }, failure.status);
 }
 
 // ── Fetch & decode site.json ──────────────────────────────────
 async function fetchSiteData(token, env) {
   const repo = getRepo(env);
   const r = await ghAPI(`/repos/${repo}/contents/content/site.json?ref=main`, token);
-  if (!r.ok) throw new Error(`GitHub API error: ${r.status}`);
+  if (!r.ok) {
+    if (r.status === 401 || r.status === 403) {
+      throw new Error('GitHub token is invalid or missing Contents access for this repo.');
+    }
+    throw new Error(`GitHub API error: ${r.status}`);
+  }
   const data = await r.json();
   const decoded = atob(data.content.replace(/\n/g, ''));
   return { siteData: JSON.parse(decoded), sha: data.sha, raw: data.content.replace(/\n/g, '') };
@@ -233,7 +255,12 @@ async function toolCheckDeploy(args, ctx) {
   const repo = getRepo(ctx.env);
   const limit = Math.min(args.limit || 5, 20);
   const r = await ghAPI(`/repos/${repo}/actions/runs?per_page=${limit}`, ctx.githubToken);
-  if (!r.ok) return `Error checking deploys: HTTP ${r.status}`;
+  if (!r.ok) {
+    if (r.status === 401 || r.status === 403) {
+      return 'GitHub token is missing Actions: read permission or repo access for Deploy Status.';
+    }
+    return `Error checking deploys: HTTP ${r.status}`;
+  }
   const body = await r.json();
   const runs = body.workflow_runs || [];
   if (runs.length === 0) return 'No deploys found. Push to main to trigger your first deploy.';
@@ -434,6 +461,7 @@ const TOOL_MAP = {
 async function executeTool(name, args, ctx) {
   const fn = TOOL_MAP[name];
   if (!fn) throw new Error(`Unknown tool: ${name}`);
+  assertToolCredentials(name, ctx);
   return fn(args || {}, ctx);
 }
 
@@ -500,15 +528,15 @@ async function handleREST(request, env) {
     const result = await executeTool(name, args || {}, ctx);
     return corsResponse({ result });
   } catch (err) {
-    return corsResponse({ error: err.message || 'Tool execution failed' }, 500);
+    return corsResponse({ error: err.message || 'Tool execution failed' }, err.status || 500);
   }
 }
 
 // ── Context Builder ───────────────────────────────────────────
 function buildContext(request, env) {
   return {
-    githubToken: request.headers.get('X-GitHub-Token') || env.GITHUB_TOKEN || '',
-    openaiKey: request.headers.get('X-OpenAI-Key') || env.OPENAI_API_KEY || '',
+    githubToken: request.headers.get('X-GitHub-Token') || '',
+    openaiKey: request.headers.get('X-OpenAI-Key') || '',
     env,
   };
 }
@@ -540,11 +568,15 @@ export default {
 
     // MCP Streamable HTTP
     if (url.pathname === '/mcp' && request.method === 'POST') {
+      const authError = requireWorkerAuth(request, env);
+      if (authError) return authError;
       return handleMCP(request, env);
     }
 
     // Simple REST API
     if (url.pathname === '/api/tool' && request.method === 'POST') {
+      const authError = requireWorkerAuth(request, env);
+      if (authError) return authError;
       return handleREST(request, env);
     }
 

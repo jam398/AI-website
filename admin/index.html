@@ -325,6 +325,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
       <div class="form-group">
         <label>GitHub Personal Access Token</label>
         <input type="password" id="setup-github" placeholder="ghp_... or github_pat_..." autocomplete="off">
+        <small>Needs <strong>Contents: Read and write</strong>. Add <strong>Actions: Read</strong> if you want Deploy Status.</small>
         <small>Needs <strong>contents: write</strong> permission for this repo only. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a Fine-grained PAT →</a></small>
       </div>
       <div class="form-group">
@@ -335,6 +336,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
         <label>MCP Server URL</label>
         <input type="text" id="setup-mcp" placeholder="https://jm-ai-mcp.YOUR-SUBDOMAIN.workers.dev">
         <small>Your Cloudflare Worker URL. Tools won't work without this.</small>
+      </div>
+      <div class="form-group">
+        <label>Worker Auth Secret</label>
+        <input type="password" id="setup-worker-auth" autocomplete="off">
+        <small>Required for deployed workers after security hardening. Stored in your browser only.</small>
       </div>
       <button class="btn-primary" id="setup-btn" onclick="saveSetup()">Get Started →</button>
       <div class="setup-error" id="setup-error"></div>
@@ -410,6 +416,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
         <label>MCP Server URL</label>
         <input type="text" id="set-mcp">
       </div>
+      <div class="form-group">
+        <label>Worker Auth Secret</label>
+        <input type="password" id="set-worker-auth" autocomplete="off">
+      </div>
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeSettings()">Cancel</button>
         <button class="btn-primary" onclick="updateSettings()">Save</button>
@@ -421,6 +431,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
   <div class="toast-container" id="toast-container"></div>
 
   <!-- ════════════════════ APPLICATION LOGIC ════════════════════ -->
+  <script src="./admin-logic.js"></script>
   <script>
 (function () {
   'use strict';
@@ -451,6 +462,7 @@ When the user clearly wants to CHANGE, UPDATE, REPLACE, ADD, or REMOVE content:
 - Change ONLY what the user asks for. Keep everything else EXACTLY the same.
 - Maintain the same JSON structure and field names.
 - Your JSON must include ALL sections: meta, nav, home, about, services, contact, footer.
+- Never change these protected fields: meta.siteTitle, meta.consultant, meta.email, contact.email, nav.
 
 Examples of edit triggers: "change the headline to...", "update the email", "add a new service", "remove the tagline", "make the bio shorter".
 
@@ -472,12 +484,20 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     contact: ['Change email template', 'Update intro text']
   };
 
+  const {
+    getEnabledToolDefinitions,
+    getLiveUrl: computeLiveUrl,
+    isLocalUrl,
+    validateCandidateData,
+  } = window.AdminLogic;
+
   /* ========== STATE ========== */
   const state = {
     openaiKey: '',
     githubToken: '',
     repo: '',
     mcpUrl: '',
+    workerAuth: '',
     siteData: null,
     siteCSS: '',
     fileSha: '',
@@ -486,7 +506,8 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     isLoading: false,
     pendingChanges: {},
     chatContext: [],   // conversation history for AI context
-    toolsReady: true
+    toolsReady: true,
+    githubCaps: null
   };
 
   /* ========== UTILITIES ========== */
@@ -516,8 +537,48 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
   }
 
   function getLiveUrl() {
-    const [owner, repo] = state.repo.split('/');
-    return `https://${owner}.github.io/${repo}/`;
+    return computeLiveUrl(state.repo);
+  }
+
+  async function validateGitHubAccess(token, repo) {
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github.v3+json'
+    };
+    const repoResp = await fetch(`https://api.github.com/repos/${repo}`, { headers });
+    if (!repoResp.ok) throw new Error('GitHub token is invalid or missing repo access.');
+    const actionsResp = await fetch(`https://api.github.com/repos/${repo}/actions/runs?per_page=1`, { headers });
+    return { actionsReadable: actionsResp.ok };
+  }
+
+  async function validateOpenAIKey(key) {
+    const r = await fetch('https://api.openai.com/v1/models', {
+      headers: { Authorization: `Bearer ${key}` }
+    });
+    if (!r.ok) throw new Error('OpenAI API key is invalid.');
+  }
+
+  function updateMcpStatus() {
+    const el = document.getElementById('mcp-status');
+    if (!el) return;
+
+    if (!state.mcpUrl) {
+      el.textContent = 'MCP -';
+      el.className = 'mcp-badge disconnected';
+      el.title = 'MCP server URL not configured';
+      return;
+    }
+
+    if (!isLocalUrl(state.mcpUrl) && !state.workerAuth) {
+      el.textContent = 'MCP !';
+      el.className = 'mcp-badge disconnected';
+      el.title = 'Worker auth secret required for deployed workers';
+      return;
+    }
+
+    el.textContent = 'MCP ✓';
+    el.className = 'mcp-badge connected';
+    el.title = 'MCP Tools (Remote Worker)';
   }
 
   /* ========== SETUP ========== */
@@ -526,6 +587,7 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     state.githubToken = localStorage.getItem('jmai_github') || '';
     state.repo = localStorage.getItem('jmai_repo') || 'jam398/AI-website';
     state.mcpUrl = localStorage.getItem('jmai_mcp_url') || '';
+    state.workerAuth = localStorage.getItem('jmai_worker_auth') || '';
   }
 
   window.saveSetup = async function () {
@@ -573,20 +635,36 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
       return;
     }
 
+    try {
+      state.githubCaps = await validateGitHubAccess(token, repo);
+    } catch (e) {
+      errEl.textContent = e.message || 'GitHub token is invalid. Make sure it has repo access.';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Get Started â†’';
+      return;
+    }
+
     // Save
     const mcpUrl = document.getElementById('setup-mcp').value.trim();
+    const workerAuth = document.getElementById('setup-worker-auth').value.trim();
     state.openaiKey = key;
     state.githubToken = token;
     state.repo = repo;
     state.mcpUrl = mcpUrl;
+    state.workerAuth = workerAuth;
     localStorage.setItem('jmai_openai', key);
     localStorage.setItem('jmai_github', token);
     localStorage.setItem('jmai_repo', repo);
     localStorage.setItem('jmai_mcp_url', mcpUrl);
+    localStorage.setItem('jmai_worker_auth', workerAuth);
 
     document.getElementById('setup').style.display = 'none';
     document.getElementById('app').style.display = '';
     await initApp();
+    if (!state.githubCaps?.actionsReadable) {
+      showToast('GitHub token works for editing, but Deploy Status also needs Actions: Read permission.', 'info');
+    }
   };
 
   /* ========== SETTINGS MODAL ========== */
@@ -595,6 +673,7 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     document.getElementById('set-github').value = state.githubToken;
     document.getElementById('set-repo').value = state.repo;
     document.getElementById('set-mcp').value = state.mcpUrl;
+    document.getElementById('set-worker-auth').value = state.workerAuth;
     document.getElementById('settings-modal').style.display = '';
   };
 
@@ -609,9 +688,11 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     localStorage.removeItem('jmai_github');
     localStorage.removeItem('jmai_repo');
     localStorage.removeItem('jmai_mcp_url');
+    localStorage.removeItem('jmai_worker_auth');
     state.openaiKey = '';
     state.githubToken = '';
     state.mcpUrl = '';
+    state.workerAuth = '';
     location.reload();
   };
 
@@ -620,10 +701,13 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     const token = document.getElementById('set-github').value.trim();
     const repo = document.getElementById('set-repo').value.trim();
     const mcpUrl = document.getElementById('set-mcp').value.trim();
+    const workerAuth = document.getElementById('set-worker-auth').value.trim();
     if (key) { state.openaiKey = key; localStorage.setItem('jmai_openai', key); }
     if (token) { state.githubToken = token; localStorage.setItem('jmai_github', token); }
     if (repo) { state.repo = repo; localStorage.setItem('jmai_repo', repo); }
     state.mcpUrl = mcpUrl; localStorage.setItem('jmai_mcp_url', mcpUrl);
+    state.workerAuth = workerAuth; localStorage.setItem('jmai_worker_auth', workerAuth);
+    updateMcpStatus();
     closeSettings();
     showToast('Settings saved', 'info');
   };
@@ -634,7 +718,12 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
       `https://api.github.com/repos/${state.repo}/contents/content/site.json?ref=main`,
       { headers: { Authorization: `Bearer ${state.githubToken}`, Accept: 'application/vnd.github.v3+json' } }
     );
-    if (!r.ok) throw new Error(`GitHub API error: ${r.status}`);
+    if (!r.ok) {
+      if (r.status === 401 || r.status === 403) {
+        throw new Error('GitHub token is invalid or missing Contents access for this repo.');
+      }
+      throw new Error(`GitHub API error: ${r.status}`);
+    }
     const d = await r.json();
     state.fileSha = d.sha;
     const raw = d.content.replace(/\n/g, '');
@@ -662,6 +751,9 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
       throw new Error('File was modified externally. Refreshed — please try again.');
     }
     if (!r.ok) {
+      if (r.status === 401 || r.status === 403) {
+        throw new Error('GitHub token is missing Contents: Read and write permission for this repo.');
+      }
       const e = await r.json().catch(() => ({}));
       throw new Error(e.message || `GitHub API ${r.status}`);
     }
@@ -693,7 +785,8 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
   ];
 
   function buildToolsForOpenAI() {
-    return TOOL_DEFINITIONS.map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }));
+    return getEnabledToolDefinitions(TOOL_DEFINITIONS, state.githubCaps)
+      .map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }));
   }
 
   // ── File picker for audio transcription (converts to base64 for worker)
@@ -729,12 +822,17 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
 
     if (!state.mcpUrl) return 'MCP server URL not configured. Go to Settings (⚙) and enter your Cloudflare Worker URL.';
 
+    if (!isLocalUrl(state.mcpUrl) && !state.workerAuth) {
+      return 'Worker auth secret not configured. Go to Settings and enter your Worker Auth Secret.';
+    }
+
     const r = await fetch(`${state.mcpUrl}/api/tool`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-GitHub-Token': state.githubToken,
         'X-OpenAI-Key': state.openaiKey,
+        'X-Worker-Auth': state.workerAuth,
         'bypass-tunnel-reminder': 'true',
       },
       body: JSON.stringify({ name, arguments: args }),
@@ -836,16 +934,14 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     if (candidate) {
       try {
         const parsed = JSON.parse(candidate);
-        const req = ['meta', 'nav', 'home', 'about', 'services', 'contact', 'footer'];
-        if (req.every(k => k in parsed)) return parsed;
+        if (REQUIRED_SECTIONS.every(k => k in parsed)) return parsed;
       } catch (_) {}
     }
     // If no fence, check if the entire response is valid JSON
     if (response.startsWith('{')) {
       try {
         const parsed = JSON.parse(response);
-        const req = ['meta', 'nav', 'home', 'about', 'services', 'contact', 'footer'];
-        if (req.every(k => k in parsed)) return parsed;
+        if (REQUIRED_SECTIONS.every(k => k in parsed)) return parsed;
       } catch (_) {}
     }
     return null;
@@ -1053,7 +1149,7 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     container.innerHTML = '';
     state.pendingChanges = {};
     state.chatContext = [];
-    addMsg('ai', 'Hi! I\'m your AI content editor. You can chat with me naturally — ask questions, get suggestions, or request changes.<br><br>Try things like:<br>• "What\'s the current headline?"<br>• "What can I change on this page?"<br>• "Make the headline shorter and more direct"<br>• "Update the email address to hello@example.com"<br><br>Switch page tabs above to preview different pages.');
+    addMsg('ai', 'Hi! I\'m your AI content editor. You can chat with me naturally — ask questions, get suggestions, or request changes.<br><br>Try things like:<br>• "What\'s the current headline?"<br>• "What can I change on this page?"<br>• "Make the headline shorter and more direct"<br>• "Update the contact intro text"<br><br>Switch page tabs above to preview different pages.');
   };
 
   /* ========== CHAT ========== */
@@ -1122,6 +1218,12 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
       const newData = extractJSON(response);
 
       if (newData) {
+        const validation = validateCandidateData(state.siteData, newData);
+        if (!validation.ok) {
+          addMsg('ai', `I generated changes that touched protected or invalid fields, so I blocked them:<br><br>${validation.errors.map(esc).join('<br>')}`);
+          state.chatContext.push({ role: 'assistant', content: `[Blocked ${validation.errors.length} invalid changes]` });
+          return;
+        }
         // MODE 2 — Edit: show diff card
         const diffs = flatDiff(state.siteData, newData);
         if (diffs.length === 0) {
@@ -1310,14 +1412,22 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     document.getElementById('live-link').href = getLiveUrl();
 
     try {
+      if (state.githubToken && state.repo) {
+        try {
+          state.githubCaps = await validateGitHubAccess(state.githubToken, state.repo);
+        } catch (_) {
+          state.githubCaps = null;
+        }
+      }
       await Promise.all([fetchSiteData(), fetchSiteCSS()]);
       updatePreview();
       updateQuickActions();
+      updateMcpStatus();
       setStatus('Connected', 'ok');
       // Restore chat history or show welcome message
       const hasHistory = restoreChatHistory();
       if (!hasHistory) {
-        addMsg('ai', 'Hi! I\'m your AI content editor. You can chat with me naturally — ask questions, get suggestions, or request changes.<br><br>Try things like:<br>• "What\'s the current headline?"<br>• "What can I change on this page?"<br>• "Make the headline shorter and more direct"<br>• "Update the email address to hello@example.com"<br><br>🔧 <strong>Built-in tools:</strong><br>• 🔍 SEO Analysis<br>• 🚀 Deploy Status<br>• 📦 Backup & Restore<br>• 📱 Social Post Generator<br>• 📊 Lighthouse Audit<br>• 🎤 Audio Transcription<br><br>Switch page tabs above to preview different pages.');
+        addMsg('ai', 'Hi! I\'m your AI content editor. You can chat with me naturally — ask questions, get suggestions, or request changes.<br><br>Try things like:<br>• "What\'s the current headline?"<br>• "What can I change on this page?"<br>• "Make the headline shorter and more direct"<br>• "Update the contact intro text"<br><br>🔧 <strong>Built-in tools:</strong><br>• 🔍 SEO Analysis<br>• 🚀 Deploy Status<br>• 📦 Backup & Restore<br>• 📱 Social Post Generator<br>• 📊 Lighthouse Audit<br>• 🎤 Audio Transcription<br><br>Switch page tabs above to preview different pages.');
       }
     } catch (err) {
       setStatus('Error', 'error');
@@ -1334,6 +1444,7 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     initApp();
   } else {
     document.getElementById('setup-repo').value = state.repo || 'jam398/AI-website';
+    document.getElementById('setup-worker-auth').value = state.workerAuth || '';
   }
 
 })();

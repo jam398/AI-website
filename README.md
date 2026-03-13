@@ -19,6 +19,7 @@ All site content lives in **one file** (`content/site.json`). Update that file a
 | **Optional local AI** | Ollama terminal tool in `tools/` (free, offline) |
 
 > 📖 **Full usage guide:** See [MANUAL.md](MANUAL.md) for detailed instructions on using the admin panel and Ollama tool.
+> 📋 **Release readiness:** See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
 ---
 
@@ -128,6 +129,8 @@ The admin panel connects to a **remote MCP tool server** (Cloudflare Worker) for
 | **Audio Transcription** | Upload an audio file → transcribed via OpenAI Whisper, with optional summary |
 
 **What you need:**
+- For **Deploy Status**, the GitHub token also needs **Actions: Read**
+- For deployed workers, set `WORKER_SHARED_SECRET` and enter the same value in the admin panel as the **Worker Auth Secret**
 - An **OpenAI API key** (~$5 credit) — [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 - A **GitHub Fine-grained Personal Access Token** with Contents: Read and write on your repo — [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)
 - A **Cloudflare Worker URL** for the MCP server — see [tools/mcp-remote/README.md](tools/mcp-remote/README.md) for deploy instructions
@@ -135,6 +138,7 @@ The admin panel connects to a **remote MCP tool server** (Cloudflare Worker) for
 **How it works:**
 1. Open `https://YOUR-USERNAME.github.io/YOUR-REPO/admin/`
 2. Enter your OpenAI API key and GitHub token (stored in your browser only)
+   Add your Worker Auth Secret too if your MCP worker is deployed.
 3. Type what you want to change in plain English (e.g., "Make the headline shorter")
 4. Review the diff (red = removed, green = added)
 5. Click **Apply & Publish** — the site rebuilds in ~1 minute
@@ -152,6 +156,12 @@ If you want to preview the site locally before pushing:
 npm install
 npm start
 # → opens http://localhost:8080
+```
+
+For a full local verification run:
+
+```bash
+npm run verify
 ```
 
 ---
@@ -179,6 +189,7 @@ The deploy workflow auto-detects whether you need a path prefix (for project sit
 
 - Create a new **Fine-grained PAT** at [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new).
 - Set **Repository access** to your specific repo and **Contents** permission to **Read and write**.
+- Add **Actions: Read** if you want the **Deploy Status** tool to work.
 
 ### Changes published but site doesn't update
 

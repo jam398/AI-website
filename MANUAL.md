@@ -49,7 +49,7 @@ https://jam398.github.io/AI-website/admin/
 
 ### Step 2: Enter Your Credentials (First Time Only)
 
-You'll see a setup screen asking for three things:
+You'll see a setup screen asking for four things:
 
 #### OpenAI API Key
 
@@ -69,11 +69,17 @@ You'll see a setup screen asking for three things:
 5. Click **Generate token**
 6. Copy the token (starts with `github_pat_`)
 
+For **Deploy Status**, this token also needs **Actions: Read**.
+
 > **Security**: Use a Fine-grained token limited to one repo. Never use a classic token with full `repo` scope.
 
 #### Repository
 
 This should already be filled in (e.g., `jam398/AI-website`). Change it only if you forked to a different repo.
+
+#### Worker Auth Secret
+
+If your MCP server is deployed to Cloudflare Workers, enter the same `WORKER_SHARED_SECRET` value here. For local MCP URLs such as `http://localhost:8787`, this can stay blank.
 
 ### Step 3: Click "Get Started"
 
@@ -235,6 +241,7 @@ Click the gear icon in the top bar to update your:
 - GitHub token
 - Repository name
 - MCP Server URL (your Cloudflare Worker URL)
+- Worker Auth Secret (required for deployed workers after hardening)
 
 ### Logout (🚪 button)
 
@@ -251,7 +258,9 @@ The AI **cannot change** these fields, even if you ask:
 - Email addresses
 - Navigation menu structure
 
-These are enforced client-side. The AI's response is checked and protected values are silently restored if tampered with.
+These are enforced client-side. The AI's response is checked before publish, and protected field changes are blocked.
+
+Protected changes are now blocked before publish. They are not silently applied.
 
 ### Rate Limiting
 
@@ -274,7 +283,7 @@ If you prefer **free, offline** editing using a local AI model (no API key neede
 Open a terminal and run:
 
 ```bash
-cd c:\Users\jose-\OneDrive\AI-consultant\tools
+cd c:\Users\jose-\Dropbox\AI-consultant\tools
 python ollama-helper.py
 ```
 
@@ -390,6 +399,7 @@ You type: "Make the headline shorter"
 |---------|----------|
 | **"OpenAI API key is invalid"** | Check that your key starts with `sk-` and your account has credit at [platform.openai.com/usage](https://platform.openai.com/usage) |
 | **"GitHub token is invalid"** | Create a new Fine-grained PAT with **Contents: Read and write** for your repo |
+| **"Deploy Status" fails** | Add **Actions: Read** to your GitHub fine-grained PAT and re-save your settings |
 | **"AI returned an invalid response"** | Rephrase your request. Be more specific. Avoid very long instructions. |
 | **"File was modified externally"** | Someone else edited site.json (or you edited it on GitHub). Click Apply again — it auto-refreshes. |
 | **Changes published but site doesn't update** | Wait 1–2 minutes. Then hard-refresh (`Ctrl+Shift+R`). Check the Actions tab for build errors. |

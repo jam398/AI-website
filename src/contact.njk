@@ -20,7 +20,7 @@ permalink: /contact/
       <div class="contact-block">
         <p class="contact-label">{{ site.contact.emailLabel }}</p>
         <p class="contact-email">
-          <a href="mailto:{{ site.contact.email }}">{{ site.contact.email }}</a>
+          <a href="mailto:{{ site.meta.email }}">{{ site.meta.email }}</a>
           <button class="copy-btn" id="copy-email-btn">Copy</button>
         </p>
       </div>
@@ -40,7 +40,7 @@ permalink: /contact/
         <h3>{{ site.contact.templateHeading }}</h3>
         <p class="template-subject"><strong>Subject:</strong> {{ site.contact.templateSubject }}</p>
         <pre>{{ site.contact.templateBody }}</pre>
-        <a href="mailto:{{ site.contact.email }}?subject={{ site.contact.templateSubject | urlencode }}" class="btn btn-primary" style="margin-top:1.5rem;">Open in Email Client</a>
+        <a href="mailto:{{ site.meta.email }}?subject={{ site.contact.templateSubject | urlencode }}" class="btn btn-primary" style="margin-top:1.5rem;">Open in Email Client</a>
       </div>
     </div>
   </div>

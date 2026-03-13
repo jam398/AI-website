@@ -27,14 +27,24 @@ npm install
    ```
 3. Note your worker URL (e.g. `https://jm-ai-mcp.YOUR-SUBDOMAIN.workers.dev`)
 
-### Optional: Set server-side secrets
+### Required: Set worker auth secret
 
-If you want the worker to have default API keys (instead of passing them per-request):
+All deployed callers must send a shared worker auth header:
 
 ```bash
-npx wrangler secret put GITHUB_TOKEN
-npx wrangler secret put OPENAI_API_KEY
+npx wrangler secret put WORKER_SHARED_SECRET
 ```
+
+The caller sends this value in the `X-Worker-Auth` header.
+
+### Credentials are passed per request
+
+The worker no longer relies on server-side fallback GitHub/OpenAI secrets for normal operation. Send user-scoped credentials per request:
+
+- `X-GitHub-Token`: GitHub PAT with `Contents: Read and write`
+- `X-OpenAI-Key`: OpenAI API key for OpenAI-backed tools
+
+For `check_deploy`, the GitHub PAT also needs `Actions: Read`.
 
 ## Usage
 
@@ -43,6 +53,7 @@ npx wrangler secret put OPENAI_API_KEY
 ```bash
 curl -X POST https://YOUR-WORKER.workers.dev/api/tool \
   -H "Content-Type: application/json" \
+  -H "X-Worker-Auth: your-shared-secret" \
   -H "X-GitHub-Token: ghp_..." \
   -H "X-OpenAI-Key: sk-..." \
   -d '{"name": "analyze_seo", "arguments": {"page": "home"}}'
@@ -59,6 +70,7 @@ Add to `.vscode/mcp.json`:
       "type": "http",
       "url": "https://YOUR-WORKER.workers.dev/mcp",
       "headers": {
+        "X-Worker-Auth": "${input:workerSecret}",
         "X-GitHub-Token": "${input:githubToken}",
         "X-OpenAI-Key": "${input:openaiKey}"
       }

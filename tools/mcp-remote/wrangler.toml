@@ -2,9 +2,9 @@ name = "jm-ai-mcp"
 main = "src/index.js"
 compatibility_date = "2024-09-25"
 
-# After first deploy, set secrets:
-#   npx wrangler secret put GITHUB_TOKEN
-#   npx wrangler secret put OPENAI_API_KEY
+# After first deploy, set the shared worker auth secret:
+#   npx wrangler secret put WORKER_SHARED_SECRET
 #
-# Or pass them per-request via X-GitHub-Token / X-OpenAI-Key headers
-# (this is what the admin panel and Android app do).
+# GitHub and OpenAI credentials must be passed per-request via
+# X-GitHub-Token / X-OpenAI-Key headers. This is what the admin
+# panel, VS Code client, and Android app should do.

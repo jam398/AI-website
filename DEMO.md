@@ -9,6 +9,7 @@ This guide walks through the full content-update cycle in under 5 minutes.
 - The repo is deployed on GitHub Pages (see [README — One-Minute Setup](README.md#one-minute-setup-for-classmates)).
 - You know your live site URL: `https://YOUR-USERNAME.github.io/YOUR-REPO/`
 - You have an **OpenAI API key** and a **GitHub Fine-grained PAT** (see [MANUAL.md](MANUAL.md#getting-started--admin-panel) for setup).
+- If your MCP server is deployed, you also have the matching **Worker Auth Secret**.
 
 ---
 
@@ -26,7 +27,7 @@ Navigate to your GitHub Pages URL. You should see:
 
 Go to: `https://YOUR-USERNAME.github.io/YOUR-REPO/admin/`
 
-- Enter your **OpenAI API key** and **GitHub token** on the setup screen.
+- Enter your **OpenAI API key**, **GitHub token**, and **Worker Auth Secret** on the setup screen.
 - Click **Get Started**. The panel loads your current site content and shows a live preview.
 
 ### Step 3 — Edit content using AI
