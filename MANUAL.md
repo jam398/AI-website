@@ -29,7 +29,7 @@ You have **three ways** to edit it:
 
 | Method | Best For | Requires |
 |--------|----------|----------|
-| **AI Admin Panel** (recommended) | Natural language edits in your browser | OpenAI API key + GitHub token |
+| **AI Admin Panel** (recommended) | Natural language edits in your browser | GitHub token + Worker Auth Secret |
 | **Ollama Terminal Tool** | Offline/free edits using local AI | Python + Ollama installed |
 | **GitHub Web Editor** | Quick manual text changes | Just a browser |
 
@@ -49,16 +49,7 @@ https://jam398.github.io/AI-website/admin/
 
 ### Step 2: Enter Your Credentials (First Time Only)
 
-You'll see a setup screen asking for four things:
-
-#### OpenAI API Key
-
-1. Go to [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-2. Click **Create new secret key**
-3. Copy the key (starts with `sk-`)
-4. Paste it into the admin panel
-
-> **Cost**: ~$0.01–0.05 per edit. You need at least $5 of credit in your OpenAI account.
+You'll see a setup screen asking for three things:
 
 #### GitHub Personal Access Token
 
@@ -79,13 +70,15 @@ This should already be filled in (e.g., `jam398/AI-website`). Change it only if 
 
 #### Worker Auth Secret
 
-If your MCP server is deployed to Cloudflare Workers, enter the same `WORKER_SHARED_SECRET` value here. For local MCP URLs such as `http://localhost:8787`, this can stay blank.
+Enter the same value you set on the Cloudflare Worker with `npx wrangler secret put WORKER_SHARED_SECRET`. For local MCP URLs such as `http://localhost:8787`, this can stay blank.
+
+> **No OpenAI key needed.** The AI is powered by an OpenAI key stored securely on the Cloudflare Worker. You never need to enter or manage it.
 
 ### Step 3: Click "Get Started"
 
-The panel validates both keys, loads your site data, and shows the editor.
+The panel validates your credentials, loads your site data, and shows the editor.
 
-> **Your keys are saved in your browser's localStorage.** They are never sent to GitHub or stored on any server. If you clear browser data, you'll need to enter them again.
+> **Your credentials are saved in your browser's localStorage.** They are never sent to any third party. If you clear browser data, you'll need to enter them again.
 
 ---
 
@@ -193,7 +186,7 @@ Clicking a quick action fills the chat input with that text. You can edit it bef
 
 ## MCP Tools
 
-The admin panel connects to a **remote MCP (Model Context Protocol) server** deployed as a Cloudflare Worker. This gives you 10 tools that work with the admin panel, VS Code, Claude Desktop, and the Android app. Just ask the AI in natural language:
+The admin panel connects to a **remote MCP (Model Context Protocol) server** deployed as a Cloudflare Worker. This gives you 10 admin-facing tools that work with the admin panel, VS Code, Claude Desktop, and the Android app. The same worker also exposes Android-only proposal and publish tools for mobile content editing. Just ask the AI in natural language:
 
 | Tool | How to Trigger | What It Does |
 |------|---------------|-------------|
@@ -221,7 +214,7 @@ Click any of these to run the tool instantly.
 
 ### How Tools Work Behind the Scenes
 
-When you ask for something like “analyze my SEO”, the AI (GPT-4o) recognizes the intent and calls the appropriate tool function. The admin panel sends the request to your Cloudflare Worker, which executes the tool using the GitHub API, PageSpeed Insights, or OpenAI Whisper. The result is sent back to GPT-4o, which interprets it and responds in plain language.
+When you ask for something like "analyze my SEO", the admin panel sends your message to the Cloudflare Worker's `/api/chat` endpoint. The worker runs GPT-4o, recognizes the intent, calls the appropriate tool, and returns the result — all server-side. The response is shown in the chat as plain language.
 
 The same MCP server also works with:
 - **VS Code** — via MCP Streamable HTTP in `.vscode/mcp.json`
@@ -237,17 +230,15 @@ See [tools/mcp-remote/README.md](tools/mcp-remote/README.md) for deployment and 
 ### Settings (⚙ button)
 
 Click the gear icon in the top bar to update your:
-- OpenAI API key
 - GitHub token
 - Repository name
 - MCP Server URL (your Cloudflare Worker URL)
-- Worker Auth Secret (required for deployed workers after hardening)
+- Worker Auth Secret (required for deployed workers)
 
 ### Logout (🚪 button)
 
-Click the door icon to **clear all stored keys** from your browser and return to the setup screen. Use this:
+Click the door icon to **clear all stored credentials** from your browser and return to the setup screen. Use this:
 - When using a shared/public computer
-- If you want to switch to a different OpenAI account
 - If your token expires and you need to enter a new one
 
 ### What's Protected
@@ -397,14 +388,14 @@ You type: "Make the headline shorter"
 
 | Problem | Solution |
 |---------|----------|
-| **"OpenAI API key is invalid"** | Check that your key starts with `sk-` and your account has credit at [platform.openai.com/usage](https://platform.openai.com/usage) |
+| **Chat returns an error** | Verify the Cloudflare Worker is running (visit `/health`). Check that `OPENAI_API_KEY` is set on the worker. See [tools/mcp-remote/README.md](tools/mcp-remote/README.md). |
 | **"GitHub token is invalid"** | Create a new Fine-grained PAT with **Contents: Read and write** for your repo |
 | **"Deploy Status" fails** | Add **Actions: Read** to your GitHub fine-grained PAT and re-save your settings |
 | **"AI returned an invalid response"** | Rephrase your request. Be more specific. Avoid very long instructions. |
 | **"File was modified externally"** | Someone else edited site.json (or you edited it on GitHub). Click Apply again — it auto-refreshes. |
 | **Changes published but site doesn't update** | Wait 1–2 minutes. Then hard-refresh (`Ctrl+Shift+R`). Check the Actions tab for build errors. |
 | **Blank page** | JavaScript must be enabled. Try a different browser if issues persist. |
-| **Keys disappeared** | You cleared browser data. Re-enter your keys on the setup screen. |
+| **Credentials disappeared** | You cleared browser data. Re-enter your GitHub token and Worker Auth Secret on the setup screen. |
 
 ### Ollama Tool
 
@@ -428,15 +419,17 @@ You type: "Make the headline shorter"
 
 ## Cost Estimates
 
-### Admin Panel (OpenAI GPT-4o)
+### Admin Panel (Cloudflare Worker + OpenAI GPT-4o)
 
-| Usage | Estimated Cost |
-|-------|---------------|
+The OpenAI API key is configured on the Cloudflare Worker — you don't manage it directly. Cost depends on usage:
+
+| Usage | Estimated OpenAI Cost |
+|-------|----------------------|
 | 1 edit | $0.01–0.05 |
 | 10 edits/week | ~$1–2/month |
 | Heavy editing session (50 edits) | ~$1–3 |
 
-> OpenAI charges by tokens. Each edit sends ~5KB of JSON + your instruction and receives ~5KB back. At GPT-4o pricing (~$2.50/M input, $10/M output), each edit costs roughly 1–5 cents.
+Cloudflare Workers Free tier is sufficient for typical use.
 
 ### Ollama (Local)
 
@@ -455,7 +448,7 @@ You type: "Make the headline shorter"
 | CI/CD (2,000 min/month) | Free |
 | Custom domain (optional) | ~$12/year |
 
-**Total monthly cost for typical use: $1–3** (just OpenAI API).
+**Total monthly cost for typical use: $1–3** (OpenAI API usage via the worker).
 
 ---
 
@@ -480,7 +473,7 @@ You type: "Make the headline shorter"
 │                                                      │
 │  DEPLOY TIME:  ~1 minute after Apply & Publish      │
 │                                                      │
-│  COST:  ~$0.01-0.05 per edit (OpenAI GPT-4o)       │
+│  COST:  ~$0.01-0.05 per edit (via Cloudflare Worker)│
 │                                                      │
 └─────────────────────────────────────────────────────┘
 ```

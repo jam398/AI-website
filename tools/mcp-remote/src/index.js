@@ -1,10 +1,11 @@
 /**
  * JM AI Consulting — MCP Tool Server (Cloudflare Worker)
  * ======================================================
- * Exposes 10 site-management tools via two interfaces:
+ * Exposes 12 site-management tools via three interfaces:
  *
+ *   POST /api/chat      — Server-side AI chat (admin panel, Android app)
  *   POST /mcp           — MCP Streamable HTTP (VS Code, Claude Desktop)
- *   POST /api/tool      — Simple REST (admin panel, Android app)
+ *   POST /api/tool      — Simple REST for direct tool calls
  *   GET  /health        — Health check
  *
  * Caller auth is required for public deployments:
@@ -12,14 +13,26 @@
  *
  * User-scoped credentials are passed per-request in headers:
  *   X-GitHub-Token   — GitHub PAT (contents:read/write, actions:read)
- *   X-OpenAI-Key     — OpenAI API key (for social posts, transcription)
+ *   X-OpenAI-Key     — OpenAI API key (for /api/tool and /mcp only)
+ *
+ * The /api/chat endpoint uses the server-side OPENAI_API_KEY secret.
  */
 
 import {
   assertToolCredentials,
+  buildChatContext,
   getLiveUrlForRepo,
   getWorkerAuthFailure,
 } from './policy.js';
+import sitePolicy from '../../../admin/site-policy.js';
+
+const {
+  buildDiffSummary,
+  getBlockedPaths,
+  getChangedPaths,
+  stableStringify,
+  validateCandidateData,
+} = sitePolicy;
 
 // ── CORS ──────────────────────────────────────────────────────
 const CORS_HEADERS = {
@@ -88,7 +101,158 @@ const TOOLS = [
     description: 'Transcribe audio via OpenAI Whisper API. Send base64-encoded audio in the audio_base64 argument.',
     inputSchema: { type: 'object', properties: { audio_base64: { type: 'string', description: 'Base64-encoded audio file content' }, filename: { type: 'string', description: 'Original filename (e.g. recording.mp3)' }, action: { type: 'string', enum: ['transcribe', 'summarize'], description: 'transcribe (full text) or summarize (key points). Default: transcribe' } }, required: ['audio_base64', 'filename'] },
   },
+  {
+    name: 'propose_content_update',
+    description: 'Generate and validate a structured site.json proposal for content editing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        instruction: { type: 'string', description: 'Natural-language content edit request.' },
+        page: { type: 'string', description: 'Optional page focus such as home, about, services, or contact.' },
+      },
+      required: ['instruction'],
+    },
+  },
+  {
+    name: 'publish_content_update',
+    description: 'Publish a previously validated site.json candidate to GitHub.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site_data: { type: 'object', description: 'Previously reviewed candidate site.json object.' },
+        proposal_hash: { type: 'string', description: 'Hash returned by propose_content_update.' },
+        base_site_sha: { type: 'string', description: 'Optional GitHub blob SHA returned by propose_content_update.' },
+        commit_message: { type: 'string', description: 'Optional commit message.' },
+      },
+      required: ['site_data', 'proposal_hash'],
+    },
+  },
 ];
+
+// ── Chat System Prompt ────────────────────────────────────────
+const CHAT_SYSTEM_PROMPT = `You are a friendly, knowledgeable AI content editor for the website "JM AI Consulting".
+
+Your job is to help the user view, analyze, and edit their website content using the tools available to you.
+
+## Rules
+
+1. Respond in plain, natural language. Be helpful and specific.
+2. NEVER return raw JSON to the user. Use tools for content operations.
+3. NEVER call publish_content_update — only the app's Publish button does that.
+4. NEVER claim a site change is live unless a tool confirms it.
+5. When a tool returns an error, preserve the exact reason. Do not describe permission, quota, auth, or server errors as generic connectivity problems.
+6. Reference actual content from the site when answering questions.
+7. If a request is vague, ask clarifying questions.
+
+## Available Tools
+
+- read_content — Read current site.json (optionally filtered by page)
+- list_pages — List all editable fields
+- search_content — Search text across all content
+- get_history — Recent commit history
+- analyze_seo — SEO quality analysis
+- check_deploy — GitHub Actions deploy status
+- backup_site — Create, list, or restore backups
+- generate_social — Generate social media posts
+- lighthouse_audit — Google Lighthouse audit
+- transcribe_audio — Transcribe or summarize audio
+- propose_content_update — Generate a validated content change proposal
+
+## Content Edit Workflow
+
+When the user wants to change content:
+1. Call propose_content_update with their instruction
+2. The tool validates the change and returns a proposal with a diff
+3. Present the proposal summary to the user in natural language
+4. The user reviews and presses Publish in the app — you do NOT publish
+
+Maintain a professional, consulting-appropriate tone.`;
+
+// ── OpenAI Tools (function-calling format) ────────────────────
+// Convert MCP TOOLS to OpenAI format, excluding publish_content_update
+const OPENAI_CHAT_TOOLS = TOOLS
+  .filter(t => t.name !== 'publish_content_update')
+  .map(t => ({
+    type: 'function',
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.inputSchema,
+    },
+  }));
+
+// ── Chat Loop ─────────────────────────────────────────────────
+const CHAT_MAX_LOOPS = 6;
+
+async function runChatLoop(messages, ctx) {
+  const toolResults = [];
+
+  for (let i = 0; i < CHAT_MAX_LOOPS; i++) {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${ctx.openaiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages,
+        temperature: 0.4,
+        max_tokens: 8192,
+        tools: OPENAI_CHAT_TOOLS,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error?.message || `OpenAI API ${response.status}`);
+    }
+
+    const data = await response.json();
+    const choice = data.choices[0];
+
+    // If no tool calls, return the text reply
+    if (choice.finish_reason !== 'tool_calls' || !choice.message.tool_calls) {
+      return {
+        reply: (choice.message.content || '').trim(),
+        toolResults,
+      };
+    }
+
+    // Process tool calls
+    messages.push(choice.message);
+
+    for (const tc of choice.message.tool_calls) {
+      const toolName = tc.function.name;
+      let toolArgs;
+      try {
+        toolArgs = JSON.parse(tc.function.arguments || '{}');
+      } catch (_) {
+        toolArgs = {};
+      }
+
+      let result;
+      try {
+        result = await executeTool(toolName, toolArgs, ctx);
+      } catch (err) {
+        result = `Error: ${err.message}`;
+      }
+
+      toolResults.push({ tool: toolName, result });
+      messages.push({
+        role: 'tool',
+        tool_call_id: tc.id,
+        content: typeof result === 'string' ? result : JSON.stringify(result),
+      });
+    }
+  }
+
+  // Hit max loops — return whatever we have
+  return {
+    reply: 'I completed several tool operations but reached the processing limit. Please check the results and ask again if you need more.',
+    toolResults,
+  };
+}
 
 // ── GitHub API Helper ─────────────────────────────────────────
 async function ghAPI(endpoint, token, options = {}) {
@@ -133,8 +297,103 @@ async function fetchSiteData(token, env) {
     throw new Error(`GitHub API error: ${r.status}`);
   }
   const data = await r.json();
-  const decoded = atob(data.content.replace(/\n/g, ''));
-  return { siteData: JSON.parse(decoded), sha: data.sha, raw: data.content.replace(/\n/g, '') };
+  const raw = data.content.replace(/\n/g, '');
+  const bytes = Uint8Array.from(atob(raw), (char) => char.charCodeAt(0));
+  const decoded = new TextDecoder().decode(bytes);
+  return { siteData: JSON.parse(decoded), sha: data.sha, raw };
+}
+
+function encodeJsonToBase64(value) {
+  const json = JSON.stringify(value, null, 2) + '\n';
+  const bytes = new TextEncoder().encode(json);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function extractJsonObject(text) {
+  const source = String(text || '').trim();
+  const fenceMatch = source.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/i);
+  const candidate = fenceMatch ? fenceMatch[1].trim() : source;
+  if (!candidate) {
+    throw new Error('OpenAI did not return a site.json candidate.');
+  }
+  return JSON.parse(candidate);
+}
+
+async function hashProposal(siteData) {
+  const bytes = new TextEncoder().encode(stableStringify(siteData));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function generateCandidateSiteData(instruction, currentSiteData, page, openaiKey) {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${openaiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content: [
+            'You are a strict website content editor.',
+            'Return only the complete updated site.json object.',
+            'Keep the exact top-level structure: meta, nav, home, about, services, contact, footer.',
+            'Do not rename fields or remove sections.',
+            'Do not change the site title, consultant name, canonical email, contact email, navigation, or derived mailto links.',
+            'Apply only the requested content edit.',
+          ].join(' '),
+        },
+        {
+          role: 'user',
+          content: [
+            page ? `The user is focused on the "${page}" page.` : 'No page focus was provided.',
+            `Instruction: ${instruction}`,
+            'Current site.json:',
+            JSON.stringify(currentSiteData, null, 2),
+          ].join('\n\n'),
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    throw new Error(errorBody.error?.message || `OpenAI API ${response.status}`);
+  }
+
+  const payload = await response.json();
+  return extractJsonObject(payload?.choices?.[0]?.message?.content || '');
+}
+
+function buildProposalPayload(currentSiteData, candidateSiteData, baseSiteSha, validation, status) {
+  const changedPaths = getChangedPaths(currentSiteData, candidateSiteData);
+  const noChanges = changedPaths.length === 0;
+  return {
+    ok: validation.ok && !noChanges,
+    status: noChanges && validation.ok ? 'no_changes' : status,
+    proposal_hash: null,
+    base_site_sha: baseSiteSha,
+    candidate_site_data: candidateSiteData,
+    changed_paths: changedPaths,
+    diff_summary: buildDiffSummary(currentSiteData, candidateSiteData),
+    validation_errors: noChanges && validation.ok
+      ? ['Instruction did not produce any content changes.']
+      : validation.errors,
+    blocked_paths: getBlockedPaths(validation.errors),
+  };
+}
+
+function normalizeCandidateInput(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value === 'string') return JSON.parse(value);
+  throw new Error('site_data must be a full site.json object.');
 }
 
 // ── Tool Implementations ──────────────────────────────────────
@@ -143,6 +402,30 @@ async function toolReadContent(args, ctx) {
   const { siteData } = await fetchSiteData(ctx.githubToken, ctx.env);
   if (args.page && siteData[args.page]) return JSON.stringify(siteData[args.page], null, 2);
   return JSON.stringify(siteData, null, 2);
+}
+
+async function toolProposeContentUpdate(args, ctx) {
+  const instruction = String(args.instruction || '').trim();
+  if (!instruction) {
+    throw new Error('instruction is required for propose_content_update.');
+  }
+
+  const { siteData, sha } = await fetchSiteData(ctx.githubToken, ctx.env);
+  const candidateSiteData = await generateCandidateSiteData(instruction, siteData, args.page, ctx.openaiKey);
+  const validation = validateCandidateData(siteData, candidateSiteData);
+  const payload = buildProposalPayload(
+    siteData,
+    candidateSiteData,
+    sha,
+    validation,
+    validation.ok ? 'proposal_ready' : 'validation_failed'
+  );
+
+  if (payload.ok) {
+    payload.proposal_hash = await hashProposal(candidateSiteData);
+  }
+
+  return JSON.stringify(payload, null, 2);
 }
 
 async function toolListPages(args, ctx) {
@@ -448,9 +731,101 @@ async function toolTranscribeAudio(args, ctx) {
   return `🎙 Transcription — ${args.filename} (${sizeMB.toFixed(1)}MB, ${transcript.split(/\s+/).length} words)\n\n${transcript}`;
 }
 
+async function toolPublishContentUpdate(args, ctx) {
+  const proposalHash = String(args.proposal_hash || '').trim();
+  if (!proposalHash) {
+    throw new Error('proposal_hash is required for publish_content_update.');
+  }
+
+  const candidateSiteData = normalizeCandidateInput(args.site_data);
+  const repo = getRepo(ctx.env);
+  const { siteData: currentSiteData, sha: currentSha } = await fetchSiteData(ctx.githubToken, ctx.env);
+
+  if (args.base_site_sha && args.base_site_sha !== currentSha) {
+    return JSON.stringify({
+      ok: false,
+      status: 'source_conflict',
+      error: 'content/site.json changed since this proposal was created. Generate a new proposal before publishing.',
+      base_site_sha: args.base_site_sha,
+      current_site_sha: currentSha,
+    }, null, 2);
+  }
+
+  const expectedHash = await hashProposal(candidateSiteData);
+  if (expectedHash !== proposalHash) {
+    return JSON.stringify({
+      ok: false,
+      status: 'proposal_hash_mismatch',
+      error: 'proposal_hash does not match the provided site_data.',
+      changed_paths: getChangedPaths(currentSiteData, candidateSiteData),
+    }, null, 2);
+  }
+
+  const validation = validateCandidateData(currentSiteData, candidateSiteData);
+  if (!validation.ok) {
+    return JSON.stringify({
+      ok: false,
+      status: 'validation_failed',
+      validation_errors: validation.errors,
+      blocked_paths: getBlockedPaths(validation.errors),
+      changed_paths: getChangedPaths(currentSiteData, candidateSiteData),
+      diff_summary: buildDiffSummary(currentSiteData, candidateSiteData),
+    }, null, 2);
+  }
+
+  const changedPaths = getChangedPaths(currentSiteData, candidateSiteData);
+  if (changedPaths.length === 0) {
+    return JSON.stringify({
+      ok: false,
+      status: 'no_changes',
+      error: 'There are no content changes to publish.',
+      changed_paths: [],
+    }, null, 2);
+  }
+
+  const putResponse = await ghAPI(`/repos/${repo}/contents/content/site.json`, ctx.githubToken, {
+    method: 'PUT',
+    body: JSON.stringify({
+      message: String(args.commit_message || 'content: publish Android proposal'),
+      content: encodeJsonToBase64(candidateSiteData),
+      sha: currentSha,
+      branch: 'main',
+    }),
+  });
+
+  if (putResponse.status === 409) {
+    return JSON.stringify({
+      ok: false,
+      status: 'source_conflict',
+      error: 'GitHub rejected the publish because content/site.json changed. Generate a fresh proposal and try again.',
+    }, null, 2);
+  }
+
+  if (!putResponse.ok) {
+    if (putResponse.status === 401 || putResponse.status === 403) {
+      throw new Error('GitHub token is missing Contents: Read and write permission for this repo.');
+    }
+    const errorBody = await putResponse.json().catch(() => ({}));
+    throw new Error(errorBody.message || `GitHub API ${putResponse.status}`);
+  }
+
+  const result = await putResponse.json();
+  return JSON.stringify({
+    ok: true,
+    status: 'published',
+    commit_sha: result.commit?.sha || '',
+    commit_url: result.commit?.html_url || '',
+    live_url: getLiveUrl(ctx.env),
+    changed_paths: changedPaths,
+    new_site_sha: result.content?.sha || '',
+  }, null, 2);
+}
+
 // ── Tool Router ───────────────────────────────────────────────
 const TOOL_MAP = {
   read_content: toolReadContent,
+  propose_content_update: toolProposeContentUpdate,
+  publish_content_update: toolPublishContentUpdate,
   list_pages: toolListPages,
   search_content: toolSearchContent,
   get_history: toolGetHistory,
@@ -536,6 +911,49 @@ async function handleREST(request, env) {
   }
 }
 
+// ── Chat API Handler ──────────────────────────────────────────
+async function handleChat(request, env) {
+  const body = await request.json();
+  const { message, history, page } = body;
+
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    return corsResponse({ error: 'Missing "message" in request body' }, 400);
+  }
+
+  const ctx = buildChatContext(request, env);
+
+  if (!ctx.openaiKey) {
+    return corsResponse({ error: 'OPENAI_API_KEY is not configured on the worker.' }, 500);
+  }
+
+  // Build messages array
+  const systemContent = page
+    ? CHAT_SYSTEM_PROMPT + `\n\nThe user is currently viewing the "${page}" page.`
+    : CHAT_SYSTEM_PROMPT;
+
+  const messages = [{ role: 'system', content: systemContent }];
+
+  // Add trimmed history (last 20 entries)
+  if (Array.isArray(history)) {
+    const trimmed = history.slice(-20);
+    for (const entry of trimmed) {
+      if (entry && entry.role && entry.content) {
+        messages.push({ role: entry.role, content: entry.content });
+      }
+    }
+  }
+
+  // Add current user message
+  messages.push({ role: 'user', content: message.trim() });
+
+  try {
+    const result = await runChatLoop(messages, ctx);
+    return corsResponse(result);
+  } catch (err) {
+    return corsResponse({ error: err.message || 'Chat request failed' }, 500);
+  }
+}
+
 // ── Context Builder ───────────────────────────────────────────
 function buildContext(request, env) {
   return {
@@ -562,6 +980,7 @@ export default {
         server: 'jm-ai-mcp',
         version: '1.0.0',
         tools: TOOLS.length,
+        chatEnabled: !!env.OPENAI_API_KEY,
       });
     }
 
@@ -582,6 +1001,13 @@ export default {
       const authError = requireWorkerAuth(request, env);
       if (authError) return authError;
       return handleREST(request, env);
+    }
+
+    // Chat API (server-side AI)
+    if (url.pathname === '/api/chat' && request.method === 'POST') {
+      const authError = requireWorkerAuth(request, env);
+      if (authError) return authError;
+      return handleChat(request, env);
     }
 
     return corsResponse({ error: 'Not found' }, 404);

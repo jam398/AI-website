@@ -44,7 +44,10 @@ export function getToolRequirements(name) {
     case 'analyze_seo':
     case 'check_deploy':
     case 'backup_site':
+    case 'publish_content_update':
       return { github: true, openai: false };
+    case 'propose_content_update':
+      return { github: true, openai: true };
     case 'generate_social':
       return { github: true, openai: true };
     case 'transcribe_audio':
@@ -73,4 +76,12 @@ export function getToolCredentialError(name, ctx) {
 export function assertToolCredentials(name, ctx) {
   const error = getToolCredentialError(name, ctx);
   if (error) throw new ToolAuthError(error);
+}
+
+export function buildChatContext(request, env) {
+  return {
+    githubToken: request.headers.get('X-GitHub-Token') || '',
+    openaiKey: env.OPENAI_API_KEY || '',
+    env,
+  };
 }

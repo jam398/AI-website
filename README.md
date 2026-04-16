@@ -14,7 +14,7 @@ All site content lives in **one file** (`content/site.json`). Update that file a
 | **Hosting** | GitHub Pages (free) |
 | **Content source** | `content/site.json` — single source of truth |
 | **Content editing** | AI-powered admin panel at `/admin` (GPT-4o chatbot) |
-| **MCP tools** | SEO analysis, deploy status, backups, social post generator, Lighthouse audit, audio transcription — via remote Cloudflare Worker |
+| **MCP tools** | SEO analysis, deploy status, backups, social post generator, Lighthouse audit, audio transcription, and Android proposal/publish tools — via remote Cloudflare Worker |
 | **CI/CD** | GitHub Actions — auto-builds on every push to `main` |
 | **Optional local AI** | Ollama terminal tool in `tools/` (free, offline) |
 
@@ -115,9 +115,9 @@ See the [Admin Panel Setup](#admin-panel-setup-admin) section below, or the full
 
 ## Admin Panel Setup (`/admin`)
 
-The `/admin` route provides an AI-powered content editor that lets you update your site using natural language. It uses **OpenAI GPT-4o** to interpret your instructions and commits changes to `content/site.json` via the GitHub API.
+The `/admin` route provides an AI-powered content editor that lets you update your site using natural language. It connects to a **Cloudflare Worker** that handles all AI processing server-side — no OpenAI key needed on the client.
 
-The admin panel connects to a **remote MCP tool server** (Cloudflare Worker) for 10 tools. The same server also works with VS Code, Claude Desktop, and the Android app:
+The worker exposes 12 admin tools via three interfaces (MCP, REST, and chat). The admin panel uses the `/api/chat` endpoint, which handles OpenAI calls and tool execution on the server:
 
 | Tool | What It Does |
 |------|-------------|
@@ -129,16 +129,17 @@ The admin panel connects to a **remote MCP tool server** (Cloudflare Worker) for
 | **Audio Transcription** | Upload an audio file → transcribed via OpenAI Whisper, with optional summary |
 
 **What you need:**
-- For **Deploy Status**, the GitHub token also needs **Actions: Read**
-- For deployed workers, set `WORKER_SHARED_SECRET` and enter the same value in the admin panel as the **Worker Auth Secret**
-- An **OpenAI API key** (~$5 credit) — [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-- A **GitHub Fine-grained Personal Access Token** with Contents: Read and write on your repo — [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)
-- A **Cloudflare Worker URL** for the MCP server — see [tools/mcp-remote/README.md](tools/mcp-remote/README.md) for deploy instructions
+
+1. **A deployed Cloudflare Worker** — see [tools/mcp-remote/README.md](tools/mcp-remote/README.md) for setup
+2. **A GitHub Fine-grained PAT** with Contents: Read and write — [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)
+   - Add **Actions: Read** if you want the Deploy Status tool
+3. **The Worker Auth Secret** — the same value you set with `npx wrangler secret put WORKER_SHARED_SECRET`
+
+> **Note:** The OpenAI API key is configured once on the Cloudflare Worker (as a secret). Clients never need it.
 
 **How it works:**
 1. Open `https://YOUR-USERNAME.github.io/YOUR-REPO/admin/`
-2. Enter your OpenAI API key and GitHub token (stored in your browser only)
-   Add your Worker Auth Secret too if your MCP worker is deployed.
+2. Enter your GitHub token and Worker Auth Secret (stored in your browser only)
 3. Type what you want to change in plain English (e.g., "Make the headline shorter")
 4. Review the diff (red = removed, green = added)
 5. Click **Apply & Publish** — the site rebuilds in ~1 minute
@@ -180,16 +181,22 @@ The deploy workflow auto-detects whether you need a path prefix (for project sit
 1. Check that the workflow ran successfully.
 2. Ensure you didn't hard-code any absolute paths in `site.json`.
 
-### Admin panel: "OpenAI API key is invalid"
+### Admin panel: "Worker auth secret is required"
 
-- Verify your key starts with `sk-` and your OpenAI account has credit.
-- Check [platform.openai.com/usage](https://platform.openai.com/usage).
+- You need to enter the same secret you set on Cloudflare with `npx wrangler secret put WORKER_SHARED_SECRET`.
+- Enter it in the admin panel's **Worker Auth Secret** field.
 
 ### Admin panel: "GitHub token is invalid"
 
 - Create a new **Fine-grained PAT** at [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new).
 - Set **Repository access** to your specific repo and **Contents** permission to **Read and write**.
 - Add **Actions: Read** if you want the **Deploy Status** tool to work.
+
+### Admin panel: Chat returns an error
+
+- Verify the Cloudflare Worker is deployed and running: visit `https://YOUR-WORKER.workers.dev/health`
+- Make sure `OPENAI_API_KEY` is set on the worker: `npx wrangler secret put OPENAI_API_KEY`
+- Check your OpenAI account has credit at [platform.openai.com/usage](https://platform.openai.com/usage)
 
 ### Changes published but site doesn't update
 

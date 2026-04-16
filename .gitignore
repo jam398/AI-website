@@ -16,3 +16,4 @@ tools/site-editor-mcp/
 # Cloudflare Worker build artifacts
 tools/mcp-remote/node_modules/
 tools/mcp-remote/.wrangler/
+__pycache__/

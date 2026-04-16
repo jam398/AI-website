@@ -6,10 +6,18 @@ Remote MCP tool server for JM AI Consulting, deployed as a Cloudflare Worker.
 
 | Method | Path | Purpose |
 |--------|------|---------|
+| `POST` | `/api/chat` | Server-side AI chat — the admin panel and Android app send messages here. The worker calls OpenAI and executes tools on behalf of the client. |
 | `POST` | `/mcp` | MCP Streamable HTTP (VS Code, Claude Desktop) |
-| `POST` | `/api/tool` | Simple REST API (admin panel, Android app) |
+| `POST` | `/api/tool` | Simple REST API for direct tool calls (publish, restore, etc.) |
 | `GET`  | `/tools` | List available tools |
 | `GET`  | `/health` | Health check |
+
+## Prerequisites
+
+- [Node.js](https://nodejs.org/) 18+
+- A free [Cloudflare](https://dash.cloudflare.com/sign-up) account
+- An [OpenAI API key](https://platform.openai.com/api-keys) (~$5 credit)
+- A [GitHub Fine-grained PAT](https://github.com/settings/personal-access-tokens/new) with **Contents: Read and write** (add **Actions: Read** for deploy status)
 
 ## Setup
 
@@ -20,42 +28,82 @@ npm install
 
 ## Deploy to Cloudflare
 
-1. Sign up at [dash.cloudflare.com](https://dash.cloudflare.com/sign-up) (free)
-2. Deploy:
-   ```bash
-   npx wrangler deploy
-   ```
-3. Note your worker URL (e.g. `https://jm-ai-mcp.YOUR-SUBDOMAIN.workers.dev`)
-
-### Required: Set worker auth secret
-
-All deployed callers must send a shared worker auth header:
-
 ```bash
-npx wrangler secret put WORKER_SHARED_SECRET
+npx wrangler deploy
 ```
 
-The caller sends this value in the `X-Worker-Auth` header.
+Note your worker URL (e.g. `https://jm-ai-mcp.YOUR-SUBDOMAIN.workers.dev`).
 
-### Credentials are passed per request
+### Set Secrets
 
-The worker no longer relies on server-side fallback GitHub/OpenAI secrets for normal operation. Send user-scoped credentials per request:
+Two secrets must be set on Cloudflare. They are stored encrypted and never appear in code:
 
-- `X-GitHub-Token`: GitHub PAT with `Contents: Read and write`
-- `X-OpenAI-Key`: OpenAI API key for OpenAI-backed tools
+```bash
+# 1. Shared secret — all callers must send this in the X-Worker-Auth header
+npx wrangler secret put WORKER_SHARED_SECRET
+# Choose any strong passphrase (e.g. "my-secret-2026")
 
-For `check_deploy`, the GitHub PAT also needs `Actions: Read`.
+# 2. OpenAI API key — used by the /api/chat endpoint on the server side
+npx wrangler secret put OPENAI_API_KEY
+# Paste your sk-... key
+```
 
-## Usage
+> **Important:** These secrets live on Cloudflare, not in any local file. If you redeploy, the secrets persist — you only set them once.
 
-### REST API (admin panel / Android app)
+### Local Development (optional)
+
+To run the worker locally with `npx wrangler dev`, create a `.dev.vars` file in this directory:
+
+```
+WORKER_SHARED_SECRET=my-local-secret
+OPENAI_API_KEY=sk-your-key-here
+```
+
+> `.dev.vars` is Wrangler's equivalent of `.env`. Never commit it.
+
+## Authentication
+
+| Header | Required | Purpose |
+|--------|----------|---------|
+| `X-Worker-Auth` | Yes (deployed) | Shared secret — must match `WORKER_SHARED_SECRET` |
+| `X-GitHub-Token` | Yes | GitHub PAT for reading/writing repo content |
+
+- `/api/chat` uses the **server-side** `OPENAI_API_KEY` secret — callers do NOT send an OpenAI key.
+- `/api/tool` and `/mcp` require callers to pass `X-OpenAI-Key` per-request (only for tools that need OpenAI, like social post generation).
+
+## Usage Examples
+
+### Chat API (admin panel / Android app)
+
+```bash
+curl -X POST https://YOUR-WORKER.workers.dev/api/chat \
+  -H "Content-Type: application/json" \
+  -H "X-Worker-Auth: your-shared-secret" \
+  -H "X-GitHub-Token: ghp_..." \
+  -d '{
+    "message": "What services do we offer?",
+    "history": [],
+    "page": null
+  }'
+```
+
+Response:
+```json
+{
+  "reply": "Your site lists three services: ...",
+  "toolResults": [
+    { "tool": "analyze_seo", "result": "{...}" }
+  ]
+}
+```
+
+### Direct Tool Call
 
 ```bash
 curl -X POST https://YOUR-WORKER.workers.dev/api/tool \
   -H "Content-Type: application/json" \
   -H "X-Worker-Auth: your-shared-secret" \
   -H "X-GitHub-Token: ghp_..." \
-  -H "X-OpenAI-Key: sk-..." \
   -d '{"name": "analyze_seo", "arguments": {"page": "home"}}'
 ```
 
@@ -92,6 +140,8 @@ This starts a local server at `http://localhost:8787` for testing.
 | Tool | Description |
 |------|-------------|
 | `read_content` | Read site.json from GitHub |
+| `propose_content_update` | Generate and validate a site.json proposal for Android editing |
+| `publish_content_update` | Publish a previously validated Android proposal to GitHub |
 | `list_pages` | List all editable fields |
 | `search_content` | Search text across all pages |
 | `get_history` | Recent commit history |
@@ -101,3 +151,5 @@ This starts a local server at `http://localhost:8787` for testing.
 | `generate_social` | AI social media post generator |
 | `lighthouse_audit` | Google PageSpeed Insights audit |
 | `transcribe_audio` | Audio transcription via Whisper |
+
+`propose_content_update` and `publish_content_update` are intended for the Android proposal/review/publish flow. The web admin panel still uses its own diff-and-publish UI.

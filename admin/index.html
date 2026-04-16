@@ -316,12 +316,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
   <div id="setup" class="setup-overlay">
     <div class="setup-card">
       <div class="setup-logo">⚡ JM AI Admin</div>
-      <p class="setup-subtitle">Connect OpenAI and GitHub to edit your site with AI</p>
-      <div class="form-group">
-        <label>OpenAI API Key</label>
-        <input type="password" id="setup-openai" placeholder="sk-..." autocomplete="off">
-        <small>Powers the AI editor. Stored in your browser only — never sent to GitHub.</small>
-      </div>
+      <p class="setup-subtitle">Connect GitHub to edit your site with AI</p>
       <div class="form-group">
         <label>GitHub Personal Access Token</label>
         <input type="password" id="setup-github" placeholder="ghp_... or github_pat_..." autocomplete="off">
@@ -401,10 +396,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
     <div class="modal-card">
       <div class="modal-title">Settings</div>
       <div class="form-group">
-        <label>OpenAI API Key</label>
-        <input type="password" id="set-openai" autocomplete="off">
-      </div>
-      <div class="form-group">
         <label>GitHub Token</label>
         <input type="password" id="set-github" autocomplete="off">
       </div>
@@ -431,6 +422,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
   <div class="toast-container" id="toast-container"></div>
 
   <!-- ════════════════════ APPLICATION LOGIC ════════════════════ -->
+  <script src="./site-policy.js"></script>
   <script src="./admin-logic.js"></script>
   <script>
 (function () {
@@ -438,46 +430,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); }
 
   /* ========== CONFIGURATION ========== */
   const PAGES = ['home', 'about', 'services', 'contact'];
-
-  const SYSTEM_PROMPT = `You are a friendly, knowledgeable AI content editor for the website "JM AI Consulting". You can see the full site content as JSON.
-
-You operate in TWO modes:
-
-## MODE 1 — CONVERSATION (default)
-When the user asks questions, wants suggestions, asks what they can change, or is chatting:
-- Respond in plain, natural language. Be helpful and specific.
-- Reference actual content from the site JSON (e.g. tell them their current headline, email, etc.)
-- Suggest improvements when asked.
-- If a request is vague, ask clarifying questions.
-- NEVER return JSON in conversation mode.
-
-Examples of conversation triggers: "what can I change?", "what's the current headline?", "suggest something", "help", "what do you think?", "show me", "tell me about", "hi", greetings, questions.
-
-## MODE 2 — EDIT
-When the user clearly wants to CHANGE, UPDATE, REPLACE, ADD, or REMOVE content:
-- Return the COMPLETE modified site.json wrapped in a JSON code block like:
-\`\`\`json
-{ ... }
-\`\`\`
-- Change ONLY what the user asks for. Keep everything else EXACTLY the same.
-- Maintain the same JSON structure and field names.
-- Your JSON must include ALL sections: meta, nav, home, about, services, contact, footer.
-- Never change these protected fields: meta.siteTitle, meta.consultant, meta.email, contact.email, nav.
-
-Examples of edit triggers: "change the headline to...", "update the email", "add a new service", "remove the tagline", "make the bio shorter".
-
-Section reference:
-- meta: site title, description, consultant name, email
-- nav: navigation menu items
-- home: landing page — headline, subheadline, service cards, how-we-work steps, CTA
-- about: consultant bio, working style, focus areas, industries served
-- services: 3 detailed service offerings with bullets and deliverables
-- contact: intro, email, suggested email template
-- footer: copyright text and tagline
-
-Maintain a professional, consulting-appropriate tone in both modes.`;
-
-  const TOOL_ERROR_PROMPT = '\nWhen an MCP tool returns an error, preserve the exact reason. Do not describe permission, quota, auth, or server errors as generic connectivity problems.';
 
   const QUICK_ACTIONS = {
     home: ['Change the headline', 'Update the subheadline', 'Edit a service card', 'Modify CTA text'],
@@ -488,7 +440,6 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
 
   const {
     REQUIRED_SECTIONS,
-    getEnabledToolDefinitions,
     getLiveUrl: computeLiveUrl,
     isLocalUrl,
     validateCandidateData,
@@ -496,7 +447,6 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
 
   /* ========== STATE ========== */
   const state = {
-    openaiKey: '',
     githubToken: '',
     repo: '',
     mcpUrl: '',
@@ -554,13 +504,6 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     return { actionsReadable: actionsResp.ok };
   }
 
-  async function validateOpenAIKey(key) {
-    const r = await fetch('https://api.openai.com/v1/models', {
-      headers: { Authorization: `Bearer ${key}` }
-    });
-    if (!r.ok) throw new Error('OpenAI API key is invalid.');
-  }
-
   function updateMcpStatus() {
     const el = document.getElementById('mcp-status');
     if (!el) return;
@@ -586,7 +529,6 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
 
   /* ========== SETUP ========== */
   function loadConfig() {
-    state.openaiKey = localStorage.getItem('jmai_openai') || '';
     state.githubToken = localStorage.getItem('jmai_github') || '';
     state.repo = localStorage.getItem('jmai_repo') || 'jam398/AI-website';
     state.mcpUrl = localStorage.getItem('jmai_mcp_url') || '';
@@ -594,14 +536,13 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
   }
 
   window.saveSetup = async function () {
-    const key = document.getElementById('setup-openai').value.trim();
     const token = document.getElementById('setup-github').value.trim();
     const repo = document.getElementById('setup-repo').value.trim();
     const errEl = document.getElementById('setup-error');
     const btn = document.getElementById('setup-btn');
 
-    if (!key || !token || !repo) {
-      errEl.textContent = 'All fields are required.';
+    if (!token || !repo) {
+      errEl.textContent = 'GitHub token and repo are required.';
       errEl.style.display = 'block';
       return;
     }
@@ -624,20 +565,6 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
       return;
     }
 
-    // Validate OpenAI key
-    try {
-      const r = await fetch('https://api.openai.com/v1/models', {
-        headers: { Authorization: `Bearer ${key}` }
-      });
-      if (!r.ok) throw new Error('Invalid OpenAI key');
-    } catch (e) {
-      errEl.textContent = 'OpenAI API key is invalid.';
-      errEl.style.display = 'block';
-      btn.disabled = false;
-      btn.textContent = 'Get Started →';
-      return;
-    }
-
     try {
       state.githubCaps = await validateGitHubAccess(token, repo);
     } catch (e) {
@@ -651,12 +578,10 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     // Save
     const mcpUrl = document.getElementById('setup-mcp').value.trim();
     const workerAuth = document.getElementById('setup-worker-auth').value.trim();
-    state.openaiKey = key;
     state.githubToken = token;
     state.repo = repo;
     state.mcpUrl = mcpUrl;
     state.workerAuth = workerAuth;
-    localStorage.setItem('jmai_openai', key);
     localStorage.setItem('jmai_github', token);
     localStorage.setItem('jmai_repo', repo);
     localStorage.setItem('jmai_mcp_url', mcpUrl);
@@ -672,7 +597,6 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
 
   /* ========== SETTINGS MODAL ========== */
   window.openSettings = function () {
-    document.getElementById('set-openai').value = state.openaiKey;
     document.getElementById('set-github').value = state.githubToken;
     document.getElementById('set-repo').value = state.repo;
     document.getElementById('set-mcp').value = state.mcpUrl;
@@ -687,12 +611,10 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
   /* ========== LOGOUT (S8: session management) ========== */
   window.logOut = function () {
     if (!confirm('Clear all saved keys and log out?')) return;
-    localStorage.removeItem('jmai_openai');
     localStorage.removeItem('jmai_github');
     localStorage.removeItem('jmai_repo');
     localStorage.removeItem('jmai_mcp_url');
     localStorage.removeItem('jmai_worker_auth');
-    state.openaiKey = '';
     state.githubToken = '';
     state.mcpUrl = '';
     state.workerAuth = '';
@@ -700,12 +622,10 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
   };
 
   window.updateSettings = function () {
-    const key = document.getElementById('set-openai').value.trim();
     const token = document.getElementById('set-github').value.trim();
     const repo = document.getElementById('set-repo').value.trim();
     const mcpUrl = document.getElementById('set-mcp').value.trim();
     const workerAuth = document.getElementById('set-worker-auth').value.trim();
-    if (key) { state.openaiKey = key; localStorage.setItem('jmai_openai', key); }
     if (token) { state.githubToken = token; localStorage.setItem('jmai_github', token); }
     if (repo) { state.repo = repo; localStorage.setItem('jmai_repo', repo); }
     state.mcpUrl = mcpUrl; localStorage.setItem('jmai_mcp_url', mcpUrl);
@@ -773,186 +693,54 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     state.siteCSS = '/* CSS could not be loaded */';
   }
 
-  /* ========== MCP TOOLS (remote worker) ========== */
-  const TOOL_DEFINITIONS = [
-    { name: 'read_content', description: 'Read the current site.json content. Returns all page content.', parameters: { type: 'object', properties: { page: { type: 'string', description: 'Optional: specific page section (home, about, services, contact, meta, footer). Omit for full content.' } } } },
-    { name: 'list_pages', description: 'List all available pages and their editable fields.', parameters: { type: 'object', properties: {} } },
-    { name: 'search_content', description: 'Search for text across all site content. Returns matching fields with paths.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Text to search for (case-insensitive)' } }, required: ['query'] } },
-    { name: 'get_history', description: 'Show recent commit history for site.json.', parameters: { type: 'object', properties: { limit: { type: 'number', description: 'Number of commits to show (default: 10, max: 30)' } } } },
-    { name: 'analyze_seo', description: 'Analyze site content for SEO quality. Returns scores, issues, and recommendations.', parameters: { type: 'object', properties: { page: { type: 'string', description: 'Optional: specific page (home, about, services, contact). Omit for all.' } } } },
-    { name: 'check_deploy', description: 'Check GitHub Actions deploy status.', parameters: { type: 'object', properties: { limit: { type: 'number', description: 'Number of recent deploys to show (default: 5, max: 20)' } } } },
-    { name: 'backup_site', description: 'Create, list, or restore site.json backups stored in the Git repository.', parameters: { type: 'object', properties: { action: { type: 'string', enum: ['backup', 'list', 'restore'], description: 'Action: backup (create new), list (show all), restore (restore from backup)' }, backup_id: { type: 'string', description: 'Required for restore: the backup filename to restore from' } }, required: ['action'] } },
-    { name: 'generate_social', description: 'Generate social media posts from site content for LinkedIn, Twitter/X, or Facebook.', parameters: { type: 'object', properties: { platform: { type: 'string', enum: ['linkedin', 'twitter', 'facebook'], description: 'Target platform' }, topic: { type: 'string', description: 'Optional: specific topic or angle' }, page: { type: 'string', description: 'Optional: page to use as content source' }, tone: { type: 'string', enum: ['professional', 'casual', 'thought-leader'], description: 'Tone (default: professional)' } }, required: ['platform'] } },
-    { name: 'lighthouse_audit', description: 'Run a Google Lighthouse audit on the live site via PageSpeed Insights API.', parameters: { type: 'object', properties: { url: { type: 'string', description: 'Optional: URL to audit. Defaults to the live GitHub Pages URL.' }, categories: { type: 'array', items: { type: 'string', enum: ['performance', 'accessibility', 'best-practices', 'seo'] }, description: 'Optional: categories to audit. Defaults to all.' } } } },
-    { name: 'transcribe_audio', description: 'Transcribe an uploaded audio file to text using OpenAI Whisper API. Supports mp3, wav, m4a, mp4, webm.', parameters: { type: 'object', properties: { action: { type: 'string', enum: ['transcribe', 'summarize'], description: 'transcribe (full text) or summarize (key points). Default: transcribe' } } } }
-  ];
-
-  function buildToolsForOpenAI() {
-    return getEnabledToolDefinitions(TOOL_DEFINITIONS, state.githubCaps)
-      .map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }));
-  }
-
-  // ── File picker for audio transcription (converts to base64 for worker)
-  function pickAudioFile() {
-    return new Promise((resolve) => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'audio/*,.mp3,.wav,.m4a,.mp4,.webm';
-      input.onchange = () => resolve(input.files[0] || null);
-      input.click();
-    });
-  }
-
-  async function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
-  // ── Execute tool via remote MCP Worker
-  async function executeToolCall(name, args) {
-    // Transcribe needs local file picker first, then sends base64 to worker
-    if (name === 'transcribe_audio') {
-      const file = await pickAudioFile();
-      if (!file) return 'No file selected.';
-      if (file.size > 25 * 1024 * 1024) return `File too large: ${(file.size / 1024 / 1024).toFixed(1)}MB (limit: 25MB).`;
-      const audio_base64 = await fileToBase64(file);
-      args = { ...args, audio_base64, filename: file.name };
+  /* ========== CHAT API ========== */
+  async function callAI(instruction) {
+    if (!state.mcpUrl) {
+      throw new Error('MCP server URL not configured. Go to Settings (⚙) and enter your Cloudflare Worker URL.');
     }
-
-    if (!state.mcpUrl) return 'MCP server URL not configured. Go to Settings (⚙) and enter your Cloudflare Worker URL.';
-
     if (!isLocalUrl(state.mcpUrl) && !state.workerAuth) {
-      return 'Worker auth secret not configured. Go to Settings and enter your Worker Auth Secret.';
+      throw new Error('Worker auth secret not configured. Go to Settings and enter your Worker Auth Secret.');
     }
 
-    const r = await fetch(`${state.mcpUrl}/api/tool`, {
+    const r = await fetch(`${state.mcpUrl}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-GitHub-Token': state.githubToken,
-        'X-OpenAI-Key': state.openaiKey,
         'X-Worker-Auth': state.workerAuth,
-        'bypass-tunnel-reminder': 'true',
+        'X-GitHub-Token': state.githubToken,
       },
-      body: JSON.stringify({ name, arguments: args }),
+      body: JSON.stringify({
+        message: instruction,
+        history: state.chatContext.slice(-20),
+        page: state.currentPage,
+      }),
     });
+
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
-      return `MCP tool error: ${e.error || r.status}`;
+      throw new Error(e.error || `Chat API ${r.status}`);
     }
+
     const data = await r.json();
 
-    // If backup restore succeeded, refresh local siteData
-    if (name === 'backup_site' && args.action === 'restore' && data.result && data.result.includes('Restored')) {
-      await fetchSiteData();
-      updatePreview();
-    }
-
-    return data.result || 'No result returned.';
-  }
-
-  /* ========== OPENAI API ========== */
-  async function callAI(instruction) {
-    // Build conversation messages with context
-    const messages = [
-      { role: 'system', content: SYSTEM_PROMPT + TOOL_ERROR_PROMPT + '\n\nYou have MCP tools available via a remote server. Use them when the user asks for SEO analysis, deploy status, backups, social media posts, lighthouse audits, or audio transcription. Call the appropriate tool instead of trying to do it yourself.' },
-      {
-        role: 'user',
-        content: `Current full site.json:\n\`\`\`json\n${JSON.stringify(state.siteData, null, 2)}\n\`\`\`\n\nThe user is currently viewing the "${state.currentPage}" page.`
-      }
-    ];
-
-    // Add last 10 conversation turns for context
-    const recent = state.chatContext.slice(-10);
-    recent.forEach(m => messages.push(m));
-
-    // Add current instruction
-    messages.push({ role: 'user', content: instruction });
-
-    const tools = buildToolsForOpenAI();
-    const requestBody = {
-      model: 'gpt-4o',
-      messages,
-      temperature: 0.4,
-      max_tokens: 8192,
-      tools
-    };
-
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.openaiKey}` },
-      body: JSON.stringify(requestBody)
-    });
-
-    if (!r.ok) {
-      const e = await r.json().catch(() => ({}));
-      throw new Error(e.error?.message || `OpenAI API ${r.status}`);
-    }
-
-    const d = await r.json();
-    const choice = d.choices[0];
-
-    // Handle function calling (MCP tool invocation)
-    if (choice.finish_reason === 'tool_calls' && choice.message.tool_calls) {
-      const toolResults = [];
-      for (const tc of choice.message.tool_calls) {
-        const toolName = tc.function.name;
-        const toolArgs = JSON.parse(tc.function.arguments || '{}');
-        try {
-          const result = await executeToolCall(toolName, toolArgs);
-          toolResults.push({ tool: toolName, result, id: tc.id });
-        } catch (err) {
-          toolResults.push({ tool: toolName, result: `Error: ${err.message}`, id: tc.id });
+    // Check for proposals in tool results
+    let proposal = null;
+    if (data.toolResults) {
+      for (const tr of data.toolResults) {
+        if (tr.tool === 'propose_content_update' && tr.result && !String(tr.result).startsWith('Error:')) {
+          try {
+            proposal = JSON.parse(tr.result);
+          } catch (_) {}
+        }
+        // If backup restore succeeded, refresh local siteData
+        if (tr.tool === 'backup_site' && tr.result && String(tr.result).includes('Restored')) {
+          await fetchSiteData();
+          updatePreview();
         }
       }
-
-      const errorResults = toolResults.filter(tr => String(tr.result || '').startsWith('Error:'));
-      if (errorResults.length > 0 && errorResults.length === toolResults.length) {
-        return errorResults.map(tr => `${tr.tool}: ${tr.result}`).join('\n');
-      }
-
-      // Send tool results back to GPT-4o for final response
-      messages.push(choice.message);
-      for (const tr of toolResults) {
-        messages.push({ role: 'tool', tool_call_id: tr.id, content: tr.result });
-      }
-
-      const r2 = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.openaiKey}` },
-        body: JSON.stringify({ model: 'gpt-4o', messages, temperature: 0.4, max_tokens: 8192 })
-      });
-      if (!r2.ok) throw new Error(`OpenAI API ${r2.status}`);
-      const d2 = await r2.json();
-      return d2.choices[0].message.content.trim();
     }
 
-    return choice.message.content.trim();
-  }
-
-  /** Try to extract JSON from AI response. Returns parsed object or null. */
-  function extractJSON(response) {
-    // Try to find ```json ... ``` block first
-    const fenceMatch = response.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-    const candidate = fenceMatch ? fenceMatch[1].trim() : null;
-    if (candidate) {
-      try {
-        const parsed = JSON.parse(candidate);
-        if (REQUIRED_SECTIONS.every(k => k in parsed)) return parsed;
-      } catch (_) {}
-    }
-    // If no fence, check if the entire response is valid JSON
-    if (response.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(response);
-        if (REQUIRED_SECTIONS.every(k => k in parsed)) return parsed;
-      } catch (_) {}
-    }
-    return null;
+    return { reply: data.reply || 'No response received.', proposal };
   }
 
   /** Convert plain text to safe HTML with basic markdown support */
@@ -1219,27 +1007,28 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
     const loadingEl = showLoading();
 
     try {
-      const response = await callAI(instruction);
+      const { reply, proposal } = await callAI(instruction);
       loadingEl.remove();
 
-      // Try to extract JSON (edit mode)
-      const newData = extractJSON(response);
-
-      if (newData) {
+      if (proposal && proposal.site_data) {
+        // Server proposed a content change via propose_content_update
+        const newData = proposal.site_data;
         const validation = validateCandidateData(state.siteData, newData);
         if (!validation.ok) {
           addMsg('ai', `I generated changes that touched protected or invalid fields, so I blocked them:<br><br>${validation.errors.map(esc).join('<br>')}`);
           state.chatContext.push({ role: 'assistant', content: `[Blocked ${validation.errors.length} invalid changes]` });
           return;
         }
-        // MODE 2 — Edit: show diff card
         const diffs = flatDiff(state.siteData, newData);
         if (diffs.length === 0) {
-          addMsg('ai', 'No changes needed — the content already matches your request.');
-          state.chatContext.push({ role: 'assistant', content: 'No changes needed.' });
+          addMsg('ai', reply || 'No changes needed — the content already matches your request.');
+          state.chatContext.push({ role: 'assistant', content: reply || 'No changes needed.' });
         } else {
           const id = Date.now();
           state.pendingChanges[id] = { data: newData, instruction };
+
+          // Show AI explanation first
+          if (reply) addMsg('ai', mdToHTML(reply));
 
           const diffHTML = diffs.slice(0, 20).map(d => `
             <div class="diff-item">
@@ -1262,9 +1051,9 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
           state.chatContext.push({ role: 'assistant', content: `[Proposed ${diffs.length} changes]` });
         }
       } else {
-        // MODE 1 — Conversation: show as chat message
-        addMsg('ai', mdToHTML(response));
-        state.chatContext.push({ role: 'assistant', content: response });
+        // Conversation reply
+        addMsg('ai', mdToHTML(reply));
+        state.chatContext.push({ role: 'assistant', content: reply });
       }
     } catch (err) {
       loadingEl.remove();
@@ -1446,7 +1235,7 @@ Maintain a professional, consulting-appropriate tone in both modes.`;
 
   // Boot
   loadConfig();
-  if (state.openaiKey && state.githubToken && state.repo) {
+  if (state.githubToken && state.repo) {
     document.getElementById('setup').style.display = 'none';
     document.getElementById('app').style.display = '';
     initApp();
