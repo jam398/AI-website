@@ -12,7 +12,7 @@ remove any dead code missed in Sprints 1-3, build and deploy web admin.
 
 ## Status
 
-Active
+Complete
 
 ## Scope
 
@@ -75,10 +75,10 @@ Active
 
 ## Completion Checklist
 
-- [ ] Web tests pass
-- [ ] Android tests pass
-- [ ] Android build passes
-- [ ] No OpenAI key in client code
-- [ ] MANUAL.md updated
-- [ ] Web admin built and deployed
-- [ ] SPEC marked Complete
+- [x] Web tests pass
+- [x] Android tests pass
+- [x] Android build passes
+- [x] No OpenAI key in client code
+- [x] MANUAL.md updated
+- [x] Web admin built and deployed
+- [x] SPEC marked Complete
