@@ -74,7 +74,7 @@
     "ctaButtonUrl": "mailto:jose--addiel@hotmail.com"
   },
   "about": {
-    "pageTitle": "About",
+    "pageTitle": "About JM AI Consulting - AI Expertise & Strategy",
     "bio": "Jose Martinez is an IT-focused AI consultant who helps organizations move from curiosity about artificial intelligence to confident, practical adoption. With a background in information technology and a focus on real-world application, Jose works with business leaders and teams to identify where AI creates genuine value — and then helps them capture it.",
     "bioExtended": "JM AI Consulting operates on a simple principle: technology should serve the business, not the other way around. Every engagement is built around your specific context, goals, and constraints. There are no one-size-fits-all solutions here.",
     "workingStyle": "All consulting is delivered remotely, with clear communication, structured timelines, and full transparency at every stage. Whether the engagement involves a single training session or a multi-phase strategy rollout, clients receive the same level of thoroughness and professionalism.",
@@ -92,10 +92,11 @@
         "description": "Developing clear roadmaps for AI adoption that align with business goals and available resources."
       }
     ],
-    "industries": "JM AI Consulting works with small and local businesses, startups, and professional services firms across a range of industries — including legal, healthcare administration, real estate, financial services, and retail."
+    "industries": "JM AI Consulting works with small and local businesses, startups, and professional services firms across a range of industries — including legal, healthcare administration, real estate, financial services, and retail.",
+    "ctaText": "Discover how AI can transform your business. Contact us today!"
   },
   "services": {
-    "pageTitle": "Services",
+    "pageTitle": "AI Consulting Services - Training, Automation, Strategy",
     "intro": "JM AI Consulting offers three core service areas, each designed to help your organization adopt AI with clarity and confidence. All services are delivered remotely and tailored to your specific needs.",
     "items": [
       {
@@ -151,7 +152,7 @@
     "ctaButtonUrl": "mailto:jose--addiel@hotmail.com"
   },
   "contact": {
-    "pageTitle": "Contact",
+    "pageTitle": "Contact JM AI Consulting - Start Your AI Journey",
     "intro": "JM AI Consulting is available for new engagements. All consulting is delivered remotely. To discuss your needs and explore how we can help, please reach out via email.",
     "emailLabel": "Email",
     "email": "jose--addiel@hotmail.com",
